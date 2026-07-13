@@ -522,10 +522,101 @@ export const scenarios = [
     category: "telekommunikation",
     title: "Kündigung wegen Preiserhöhung",
     kind: "Rollenspiel",
+    difficulty: "hard",
     summary:
       "Ein Kunde möchte wegen einer Preiserhöhung sofort kündigen — Sie versuchen, ihn zu halten.",
     prompt:
       "Rollenspiel: Ein Kunde ruft an und möchte seinen Mobilfunkvertrag sofort kündigen, weil der Preis gerade erhöht wurde. Er ist genervt und in Eile. Hören Sie ihm zu, entschuldigen Sie sich für die Unannehmlichkeit und versuchen Sie höflich, eine Lösung anzubieten, damit er bleibt.",
+  },
+  {
+    id: "internetausfall-rollenspiel",
+    category: "telekommunikation",
+    title: "Kompletter Internetausfall",
+    kind: "Rollenspiel",
+    difficulty: "medium",
+    summary: "Ein Kunde ist seit dem Morgen komplett offline und arbeitet von zu Hause.",
+    prompt:
+      "Rollenspiel: Ein Kunde ruft an, weil sein Internet seit den frühen Morgenstunden komplett ausgefallen ist und er dringend von zu Hause aus arbeiten muss. Er klingt gestresst und zunehmend verzweifelt. Nehmen Sie die Störung ernst, erklären Sie das weitere Vorgehen und bieten Sie eine realistische Zeitangabe an.",
+  },
+  {
+    id: "doppelte-abbuchung-rollenspiel",
+    category: "telekommunikation",
+    title: "Doppelte Abbuchung auf der Rechnung",
+    kind: "Rollenspiel",
+    difficulty: "medium",
+    summary: "Ein Kunde entdeckt, dass der Monatsbetrag zweimal von seinem Konto abgebucht wurde.",
+    prompt:
+      "Rollenspiel: Ein Kunde ruft verärgert an, weil der monatliche Rechnungsbetrag diesen Monat zweimal von seinem Konto abgebucht wurde. Er fordert eine sofortige Rückerstattung. Hören Sie sich sein Anliegen an, entschuldigen Sie sich für den Fehler und erklären Sie die nächsten Schritte zur Klärung.",
+  },
+  {
+    id: "vertragsverlaengerung-verwirrt-rollenspiel",
+    category: "telekommunikation",
+    title: "Verwirrung über automatische Vertragsverlängerung",
+    kind: "Rollenspiel",
+    difficulty: "easy",
+    summary: "Ein Kunde versteht nicht, warum sich sein Vertrag automatisch verlängert hat.",
+    prompt:
+      "Rollenspiel: Ein Kunde ruft verwirrt an, weil sein Vertrag sich automatisch um zwölf Monate verlängert hat und er das nicht erwartet hatte. Er ist nicht wütend, nur unsicher und möchte verstehen, was jetzt möglich ist. Erklären Sie ihm die Vertragsbedingungen geduldig und zeigen Sie mögliche Optionen auf.",
+  },
+  {
+    id: "umzug-vertragsuebernahme-rollenspiel",
+    category: "telekommunikation",
+    title: "Vertragsänderung wegen Umzugs",
+    kind: "Rollenspiel",
+    difficulty: "easy",
+    summary: "Ein Kunde zieht um und möchte seinen bestehenden Vertrag auf die neue Adresse übertragen.",
+    prompt:
+      "Rollenspiel: Ein Kunde zieht in zwei Wochen um und möchte wissen, wie sein bestehender Vertrag an die neue Adresse übertragen werden kann. Er ist freundlich, aber besteht darauf, dass am Umzugstag keine Unterbrechung entsteht. Erklären Sie ihm den Ablauf und die zeitlichen Abläufe klar und verbindlich.",
+  },
+  {
+    id: "kuendigung-fristablauf-rollenspiel",
+    category: "telekommunikation",
+    title: "Kündigung kurz vor Vertragsende",
+    kind: "Rollenspiel",
+    difficulty: "medium",
+    summary: "Ein Kunde möchte kurzfristig kündigen und besteht darauf, dass die Frist bereits abgelaufen ist.",
+    prompt:
+      "Rollenspiel: Ein Kunde ruft an und besteht darauf, dass seine Kündigungsfrist bereits abgelaufen sei, obwohl das System etwas anderes zeigt. Er ist ungeduldig und möchte eine schnelle Antwort. Prüfen Sie die Situation ruhig, erklären Sie die tatsächliche Sachlage und bieten Sie eine faire Lösung an.",
+  },
+  {
+    id: "netzausfall-strassenzug-rollenspiel",
+    category: "telekommunikation",
+    title: "Netzausfall im ganzen Straßenzug",
+    kind: "Rollenspiel",
+    difficulty: "hard",
+    summary: "Mehrere Nachbarn sind betroffen, der Kunde macht seinem Ärger über wiederholte Ausfälle Luft.",
+    prompt:
+      "Rollenspiel: Ein Kunde ruft wütend an, weil es im gesamten Straßenzug bereits zum dritten Mal in diesem Monat einen Netzausfall gibt. Er droht, zu einem anderen Anbieter zu wechseln. Nehmen Sie seinen Frust ernst, erklären Sie transparent, was bekannt ist, und bieten Sie eine konkrete Geste des Entgegenkommens an.",
+  },
+  {
+    id: "tarifwechsel-versprechen-rollenspiel",
+    category: "telekommunikation",
+    title: "Angeblich mündlich zugesagter Tarif",
+    kind: "Rollenspiel",
+    difficulty: "hard",
+    summary: "Ein Kunde beruft sich auf ein Telefonat, in dem ihm angeblich ein günstigerer Tarif zugesagt wurde.",
+    prompt:
+      "Rollenspiel: Ein Kunde ruft aufgebracht an und behauptet, ihm sei in einem früheren Telefonat ein deutlich günstigerer Tarif fest zugesagt worden, der jetzt aber nicht in seiner Rechnung auftaucht. Er wird im Gespräch zunehmend emotional. Bleiben Sie geduldig, prüfen Sie die Dokumentation und finden Sie eine glaubwürdige, faire Lösung.",
+  },
+  {
+    id: "geraetetausch-garantie-rollenspiel",
+    category: "telekommunikation",
+    title: "Router-Tausch innerhalb der Garantie",
+    kind: "Rollenspiel",
+    difficulty: "easy",
+    summary: "Ein Kunde möchte seinen defekten Router im Rahmen der Garantie unkompliziert austauschen lassen.",
+    prompt:
+      "Rollenspiel: Ein Kunde ruft an, weil sein Router nach wenigen Monaten nicht mehr richtig funktioniert. Er ist sachlich und freundlich, erwartet aber einen unkomplizierten und schnellen Austausch, da er im Homeoffice arbeitet. Erklären Sie ihm den Ablauf des Austauschs klar und verbindlich.",
+  },
+  {
+    id: "jugendlicher-vertrag-mutter-rollenspiel",
+    category: "telekommunikation",
+    title: "Mutter ruft für erwachsenes Kind an",
+    kind: "Rollenspiel",
+    difficulty: "medium",
+    summary: "Eine Kundin möchte eine Vertragsänderung für den Anschluss ihres erwachsenen Sohnes vornehmen.",
+    prompt:
+      "Rollenspiel: Eine Kundin ruft an und möchte im Namen ihres erwachsenen Sohnes Änderungen an dessen Mobilfunkvertrag vornehmen. Sie ist unsicher, ob das ohne ihn möglich ist, und wirkt etwas überfordert mit dem Ablauf. Erklären Sie freundlich, was rechtlich möglich ist und welche Schritte nötig sind.",
   },
 
   // --- Einzelhandel ---
@@ -534,6 +625,7 @@ export const scenarios = [
     category: "einzelhandel",
     title: "Reklamation am Telefon",
     kind: "Rollenspiel",
+    difficulty: "hard",
     summary:
       "Ein verärgerter Kunde ruft wegen einer verspäteten Lieferung an. Sie sind der Kundenservice.",
     prompt:
@@ -1024,9 +1116,90 @@ export const scenarios = [
     category: "einzelhandel",
     title: "Angeblich defektes Produkt",
     kind: "Rollenspiel",
+    difficulty: "medium",
     summary: "Ein Kunde bringt ein angeblich defektes Produkt zurück und ist misstrauisch.",
     prompt:
       "Rollenspiel: Ein Kunde kommt an den Serviceschalter und behauptet, ein gekauftes Gerät sei von Anfang an defekt gewesen. Er wirkt misstrauisch und erwartet eine sofortige Rückerstattung. Nehmen Sie seine Reklamation auf, klären Sie die nächsten Schritte und bleiben Sie dabei freundlich und professionell.",
+  },
+  {
+    id: "umtausch-ohne-etikett-rollenspiel",
+    category: "einzelhandel",
+    title: "Rückgabe ohne Etikett",
+    kind: "Rollenspiel",
+    difficulty: "easy",
+    summary: "Ein Kunde möchte ein Kleidungsstück zurückgeben, das Etikett wurde jedoch bereits entfernt.",
+    prompt:
+      "Rollenspiel: Ein Kunde möchte ein Kleidungsstück zurückgeben, hat aber das Etikett bereits entfernt und den Kassenbon nicht dabei. Er ist in Eile und möchte die Sache schnell erledigen. Prüfen Sie die Situation freundlich, erklären Sie die Richtlinie und finden Sie eine faire Lösung.",
+  },
+  {
+    id: "lagerbestand-online-abweichung-rollenspiel",
+    category: "einzelhandel",
+    title: "Artikel online verfügbar, im Laden nicht",
+    kind: "Rollenspiel",
+    difficulty: "medium",
+    summary: "Ein Kunde ist extra für einen Artikel gekommen, der laut Website vorrätig sein sollte.",
+    prompt:
+      "Rollenspiel: Ein Kunde kommt extra in die Filiale, weil die Website einen Artikel als vorrätig anzeigte, dieser aber tatsächlich nicht auffindbar ist. Er ist verwirrt und enttäuscht, aber nicht aggressiv. Erklären Sie die mögliche Ursache, entschuldigen Sie sich und bieten Sie eine Alternative an.",
+  },
+  {
+    id: "mehrfach-defektes-geraet-rollenspiel",
+    category: "einzelhandel",
+    title: "Bereits zweite Reparatur nötig",
+    kind: "Rollenspiel",
+    difficulty: "hard",
+    summary: "Ein Kunde bringt ein Gerät zum zweiten Mal zur Reparatur und verlangt einen vollständigen Ersatz.",
+    prompt:
+      "Rollenspiel: Ein Kunde bringt ein Gerät bereits zum zweiten Mal wegen desselben Defekts zurück und verlangt lautstark einen sofortigen Ersatz statt einer erneuten Reparatur. Nehmen Sie seine Frustration ernst, prüfen Sie die Historie und schlagen Sie eine überzeugende Lösung vor.",
+  },
+  {
+    id: "geschenk-rueckgabe-ohne-beleg-rollenspiel",
+    category: "einzelhandel",
+    title: "Geschenk ohne Kassenbon zurückgeben",
+    kind: "Rollenspiel",
+    difficulty: "medium",
+    summary: "Ein Kunde möchte ein ungewolltes Geschenk zurückgeben, hat aber keinen Beleg und kennt den Käufer nicht.",
+    prompt:
+      "Rollenspiel: Ein Kunde möchte ein Geschenk zurückgeben, das ihm nicht gefällt, hat aber weder Kassenbon noch Informationen darüber, wer es gekauft hat. Er wirkt niedergeschlagen, weil er das Produkt einfach nicht gebrauchen kann. Erklären Sie einfühlsam die Möglichkeiten, die es trotzdem gibt.",
+  },
+  {
+    id: "farbabweichung-online-bestellung-rollenspiel",
+    category: "einzelhandel",
+    title: "Farbe weicht vom Bild ab",
+    kind: "Rollenspiel",
+    difficulty: "easy",
+    summary: "Ein online bestellter Artikel kam in einer anderen Farbe an als auf dem Produktfoto gezeigt.",
+    prompt:
+      "Rollenspiel: Ein Kunde ruft an, weil ein online bestellter Artikel in einer merklich anderen Farbe geliefert wurde als auf dem Produktfoto zu sehen war. Er ist höflich, aber bestimmt und möchte eine klare Lösung. Erklären Sie die Optionen (Umtausch oder Rückerstattung) und leiten Sie die nächsten Schritte ein.",
+  },
+  {
+    id: "warteschlange-beschwerde-rollenspiel",
+    category: "einzelhandel",
+    title: "Beschwerde über lange Wartezeit",
+    kind: "Rollenspiel",
+    difficulty: "medium",
+    summary: "Ein Kunde beschwert sich, dass er trotz weniger Kunden im Laden sehr lange auf Bedienung warten musste.",
+    prompt:
+      "Rollenspiel: Ein Kunde beschwert sich an der Information, dass er trotz eines fast leeren Ladens über zehn Minuten auf Bedienung warten musste. Er ist genervt, aber sachlich. Entschuldigen Sie sich glaubwürdig und bieten Sie an, sein eigentliches Anliegen jetzt zügig zu klären.",
+  },
+  {
+    id: "kind-zerbricht-ware-rollenspiel",
+    category: "einzelhandel",
+    title: "Kind beschädigt Ware im Laden",
+    kind: "Rollenspiel",
+    difficulty: "hard",
+    summary: "Ein Elternteil ist sichtlich aufgewühlt, nachdem das eigene Kind versehentlich Ware beschädigt hat.",
+    prompt:
+      "Rollenspiel: Ein Elternteil kommt aufgewühlt zur Kasse, weil das eigene Kind versehentlich ein empfindliches Produkt im Regal beschädigt hat. Die Person ist den Tränen nahe und erwartet eine hohe Rechnung. Reagieren Sie einfühlsam, klären Sie die Situation ruhig und erklären Sie das weitere Vorgehen.",
+  },
+  {
+    id: "fehlender-artikel-lieferung-rollenspiel",
+    category: "einzelhandel",
+    title: "Ein Artikel fehlt in der Lieferung",
+    kind: "Rollenspiel",
+    difficulty: "easy",
+    summary: "Bei einer größeren Bestellung fehlt ein einzelner Artikel, der Kunde ist unsicher, wie er vorgehen soll.",
+    prompt:
+      "Rollenspiel: Ein Kunde ruft an, weil bei seiner großen Online-Bestellung ein einzelner Artikel gefehlt hat. Er ist nicht verärgert, nur unsicher, ob er selbst etwas übersehen hat oder ob es ein Fehler des Geschäfts war. Klären Sie die Situation freundlich auf und erklären Sie das weitere Vorgehen.",
   },
 
   // --- Reise & Tourismus ---
@@ -1515,9 +1688,100 @@ export const scenarios = [
     category: "reise-tourismus",
     title: "Enttäuschendes Hotel im Urlaub",
     kind: "Rollenspiel",
+    difficulty: "hard",
     summary: "Ein Kunde beschwert sich telefonisch über ein enttäuschendes Hotel im Urlaub.",
     prompt:
       "Rollenspiel: Ein Kunde ruft während seines Urlaubs aufgebracht an, weil das gebuchte Hotelzimmer klein, laut und ganz anders als auf den Fotos ist. Er verlangt eine sofortige Lösung. Beruhigen Sie ihn, entschuldigen Sie sich und bieten Sie eine konkrete nächste Maßnahme an.",
+  },
+  {
+    id: "flugverspaetung-anschlussflug-rollenspiel",
+    category: "reise-tourismus",
+    title: "Anschlussflug durch Verspätung verpasst",
+    kind: "Rollenspiel",
+    difficulty: "hard",
+    summary: "Ein Kunde hat wegen einer Verspätung seinen Anschlussflug verpasst und sitzt gestrandet am Flughafen.",
+    prompt:
+      "Rollenspiel: Ein Kunde ruft aufgelöst vom Flughafen an, weil er wegen einer Verspätung seinen Anschlussflug verpasst hat und nicht weiß, wie er weiterreisen soll. Er klingt erschöpft und zunehmend verzweifelt. Beruhigen Sie ihn, prüfen Sie die Umbuchungsmöglichkeiten und erklären Sie die nächsten Schritte klar.",
+  },
+  {
+    id: "verlorenes-gepaeck-rollenspiel",
+    category: "reise-tourismus",
+    title: "Gepäck kommt nicht am Zielort an",
+    kind: "Rollenspiel",
+    difficulty: "hard",
+    summary: "Ein Kunde steht am Gepäckband und sein Koffer ist trotz Ankunft nicht dabei.",
+    prompt:
+      "Rollenspiel: Ein Kunde ruft direkt vom Flughafen aus an, weil sein Koffer bei der Ankunft nicht auf dem Gepäckband war. Er benötigt dringend Kleidung für einen Geschäftstermin am nächsten Tag und ist sehr verärgert. Nehmen Sie die Meldung auf, erklären Sie den Ablauf der Nachverfolgung und bieten Sie eine Zwischenlösung an.",
+  },
+  {
+    id: "stornierung-kurzfristig-rollenspiel",
+    category: "reise-tourismus",
+    title: "Kurzfristige Stornierung wegen Krankheit",
+    kind: "Rollenspiel",
+    difficulty: "medium",
+    summary: "Ein Kunde muss seine gebuchte Reise wegen plötzlicher Krankheit kurzfristig stornieren.",
+    prompt:
+      "Rollenspiel: Ein Kunde ruft niedergeschlagen an, weil er seine in wenigen Tagen beginnende Reise wegen einer plötzlichen Erkrankung nicht antreten kann. Er ist unsicher, was mit seinem Geld passiert. Zeigen Sie Verständnis und erklären Sie ruhig die Stornobedingungen und möglichen Optionen.",
+  },
+  {
+    id: "doppelbuchung-hotel-rollenspiel",
+    category: "reise-tourismus",
+    title: "Hotel zeigt keine Buchung an",
+    kind: "Rollenspiel",
+    difficulty: "medium",
+    summary: "Ein Kunde steht an der Hotelrezeption im Ausland, dort ist jedoch keine Buchung hinterlegt.",
+    prompt:
+      "Rollenspiel: Ein Kunde ruft aus dem Ausland an, weil das Hotel vor Ort keine Buchung unter seinem Namen findet, obwohl er eine Bestätigung erhalten hat. Er ist müde von der Reise und zunehmend ungeduldig. Klären Sie die Situation schnell und bieten Sie eine sofortige Lösung an.",
+  },
+  {
+    id: "visum-informationen-verwirrt-rollenspiel",
+    category: "reise-tourismus",
+    title: "Unsicherheit bei Einreisebestimmungen",
+    kind: "Rollenspiel",
+    difficulty: "easy",
+    summary: "Ein Kunde ist unsicher, welche Einreisedokumente für sein gebuchtes Reiseziel nötig sind.",
+    prompt:
+      "Rollenspiel: Ein Kunde ruft verunsichert an, weil er kurz vor der Abreise nicht genau weiß, welche Einreisedokumente für sein Reiseziel erforderlich sind. Er ist nicht verärgert, nur nervös. Erklären Sie ihm geduldig und klar, was er prüfen und vorbereiten sollte.",
+  },
+  {
+    id: "umbuchung-familientermin-rollenspiel",
+    category: "reise-tourismus",
+    title: "Umbuchung wegen familiärem Notfall",
+    kind: "Rollenspiel",
+    difficulty: "medium",
+    summary: "Ein Kunde muss seinen Rückflug wegen eines familiären Notfalls dringend vorziehen.",
+    prompt:
+      "Rollenspiel: Ein Kunde ruft aufgewühlt an, weil er wegen eines familiären Notfalls seinen Rückflug so schnell wie möglich vorziehen muss. Er ist emotional, aber kooperativ. Reagieren Sie einfühlsam und erklären Sie zügig die verfügbaren Optionen und Kosten.",
+  },
+  {
+    id: "zimmerkategorie-falsch-geliefert-rollenspiel",
+    category: "reise-tourismus",
+    title: "Falsche Zimmerkategorie gebucht erhalten",
+    kind: "Rollenspiel",
+    difficulty: "easy",
+    summary: "Ein Kunde hat ein Zimmer mit Meerblick gebucht, aber ein Standardzimmer zugewiesen bekommen.",
+    prompt:
+      "Rollenspiel: Ein Kunde ruft an, weil er im Hotel ein einfaches Standardzimmer erhalten hat, obwohl er ausdrücklich ein Zimmer mit Meerblick gebucht und bezahlt hatte. Er bleibt höflich, besteht aber auf einer Korrektur. Prüfen Sie die Buchung und erklären Sie das weitere Vorgehen verbindlich.",
+  },
+  {
+    id: "reiseversicherung-unklar-rollenspiel",
+    category: "reise-tourismus",
+    title: "Unklarheit über Reiseversicherung",
+    kind: "Rollenspiel",
+    difficulty: "medium",
+    summary: "Ein Kunde versteht nicht genau, was seine gebuchte Reiseversicherung eigentlich abdeckt.",
+    prompt:
+      "Rollenspiel: Ein Kunde ruft an, weil er vor der Abreise noch einmal genau wissen möchte, was seine gebuchte Reiseversicherung im Ernstfall tatsächlich abdeckt. Er ist nicht ungeduldig, möchte aber eine verständliche Erklärung ohne Fachjargon. Erklären Sie die Details einfach und nachvollziehbar.",
+  },
+  {
+    id: "reisegruppe-getrennte-sitzplaetze-rollenspiel",
+    category: "reise-tourismus",
+    title: "Familie sitzt im Flugzeug getrennt",
+    kind: "Rollenspiel",
+    difficulty: "hard",
+    summary: "Eine Familie mit kleinen Kindern wurde beim Check-in auf getrennte Sitzplätze verteilt.",
+    prompt:
+      "Rollenspiel: Ein Kunde ruft aufgebracht an, weil seine Familie mit zwei kleinen Kindern beim Online-Check-in über das ganze Flugzeug verteilt eingeteilt wurde. Er verlangt eine sofortige Lösung vor dem Abflug. Nehmen Sie das Anliegen ernst und erklären Sie, was kurzfristig möglich ist.",
   },
 
   // --- Gastgewerbe ---
@@ -1994,9 +2258,100 @@ export const scenarios = [
     category: "gastgewerbe",
     title: "Mehrere Probleme gleichzeitig",
     kind: "Rollenspiel",
+    difficulty: "hard",
     summary: "Ein Gast beschwert sich an der Rezeption über mehrere Probleme gleichzeitig.",
     prompt:
       "Rollenspiel: Ein Gast kommt an die Rezeption und beschwert sich, dass sein Zimmer laut, das Frühstück kalt und der WLAN-Zugang nicht funktionsfähig war. Er ist sichtlich frustriert. Hören Sie ihm zu, entschuldigen Sie sich aufrichtig und bieten Sie eine konkrete Wiedergutmachung an.",
+  },
+  {
+    id: "klimaanlage-defekt-rollenspiel",
+    category: "gastgewerbe",
+    title: "Klimaanlage funktioniert nicht",
+    kind: "Rollenspiel",
+    difficulty: "medium",
+    summary: "Ein Gast beschwert sich, dass die Klimaanlage im Zimmer bei großer Hitze nicht funktioniert.",
+    prompt:
+      "Rollenspiel: Ein Gast ruft an der Rezeption an, weil die Klimaanlage in seinem Zimmer bei großer Hitze draußen nicht funktioniert und er kaum schlafen konnte. Er wirkt erschöpft und frustriert. Entschuldigen Sie sich glaubwürdig und bieten Sie eine schnelle, konkrete Lösung an.",
+  },
+  {
+    id: "laermbelaestigung-nachbarzimmer-rollenspiel",
+    category: "gastgewerbe",
+    title: "Lärm aus dem Nachbarzimmer",
+    kind: "Rollenspiel",
+    difficulty: "easy",
+    summary: "Ein Gast beschwert sich mitten in der Nacht über laute Musik aus dem Nachbarzimmer.",
+    prompt:
+      "Rollenspiel: Ein Gast ruft spätabends an der Rezeption an, weil aus dem Nachbarzimmer laute Musik zu hören ist und er schlafen möchte. Er ist genervt, aber nicht unhöflich. Reagieren Sie schnell und professionell und erklären Sie, was Sie sofort unternehmen.",
+  },
+  {
+    id: "rechnung-minibar-streit-rollenspiel",
+    category: "gastgewerbe",
+    title: "Streit über Minibar-Abrechnung",
+    kind: "Rollenspiel",
+    difficulty: "medium",
+    summary: "Ein Gast bestreitet vehement, Artikel aus der Minibar entnommen zu haben.",
+    prompt:
+      "Rollenspiel: Ein Gast beschwert sich beim Check-out lautstark, dass ihm Minibar-Artikel berechnet wurden, die er nie angerührt hat. Er wird zunehmend ungehalten. Bleiben Sie ruhig, prüfen Sie die Abrechnung und finden Sie eine faire, nachvollziehbare Lösung.",
+  },
+  {
+    id: "spaeter-checkin-verwirrt-rollenspiel",
+    category: "gastgewerbe",
+    title: "Unsicherheit wegen später Anreise",
+    kind: "Rollenspiel",
+    difficulty: "easy",
+    summary: "Ein Gast ist unsicher, ob sein Zimmer bei sehr später Anreise noch garantiert ist.",
+    prompt:
+      "Rollenspiel: Ein Gast ruft an, weil sein Flug sich verspätet und er erst weit nach Mitternacht im Hotel ankommen wird. Er ist unsicher, ob sein Zimmer dann noch für ihn reserviert bleibt. Erklären Sie ihm die Situation beruhigend und klar.",
+  },
+  {
+    id: "hochzeitstag-ueberraschung-rollenspiel",
+    category: "gastgewerbe",
+    title: "Besonderer Wunsch zum Hochzeitstag",
+    kind: "Rollenspiel",
+    difficulty: "easy",
+    summary: "Ein Gast möchte eine kleine Überraschung für den Hochzeitstag seiner Partnerin im Zimmer organisieren.",
+    prompt:
+      "Rollenspiel: Ein Gast ruft an und möchte für den Hochzeitstag seiner Partnerin eine kleine Überraschung im Zimmer arrangieren lassen, zum Beispiel Blumen oder eine besondere Dekoration. Er ist freundlich, aber möchte genaue Zusagen. Klären Sie die Möglichkeiten und den Ablauf verbindlich.",
+  },
+  {
+    id: "ueberbuchung-zimmer-rollenspiel",
+    category: "gastgewerbe",
+    title: "Zimmer bei Ankunft überbucht",
+    kind: "Rollenspiel",
+    difficulty: "hard",
+    summary: "Eine Familie steht nach langer Anreise vor der Rezeption, das gebuchte Zimmer ist jedoch überbucht.",
+    prompt:
+      "Rollenspiel: Eine Familie kommt nach einer langen Anreise an der Rezeption an und erfährt, dass ihr gebuchtes Zimmer überbucht wurde. Die Eltern sind erschöpft und mit den müden Kindern zunehmend verzweifelt. Entschuldigen Sie sich aufrichtig und bieten Sie sofort eine konkrete Alternative an.",
+  },
+  {
+    id: "allergie-fruehstuecksbuffet-rollenspiel",
+    category: "gastgewerbe",
+    title: "Frage zu Allergenen am Frühstücksbuffet",
+    kind: "Rollenspiel",
+    difficulty: "medium",
+    summary: "Ein Gast mit einer schweren Nussallergie möchte genau wissen, welche Speisen sicher sind.",
+    prompt:
+      "Rollenspiel: Ein Gast mit einer schweren Nussallergie kommt zur Rezeption und möchte genau wissen, welche Speisen am Frühstücksbuffet sicher für ihn sind. Er ist höflich, aber sehr bestimmt, weil es um seine Gesundheit geht. Nehmen Sie das Anliegen ernst und erklären Sie das weitere Vorgehen sorgfältig.",
+  },
+  {
+    id: "falsches-zimmer-zugewiesen-rollenspiel",
+    category: "gastgewerbe",
+    title: "Bereits belegtes Zimmer zugewiesen",
+    kind: "Rollenspiel",
+    difficulty: "hard",
+    summary: "Ein Gast betritt sein zugewiesenes Zimmer und findet die persönlichen Sachen eines anderen Gasts darin vor.",
+    prompt:
+      "Rollenspiel: Ein Gast kommt aufgebracht zur Rezeption zurück, weil in seinem zugewiesenen Zimmer bereits die Koffer eines anderen Gasts standen. Er fühlt sich unsicher und verlangt eine sofortige Erklärung. Entschuldigen Sie sich ernsthaft und lösen Sie die Situation zügig und diskret.",
+  },
+  {
+    id: "verlaengerung-aufenthalt-spontan-rollenspiel",
+    category: "gastgewerbe",
+    title: "Spontane Verlängerung des Aufenthalts",
+    kind: "Rollenspiel",
+    difficulty: "easy",
+    summary: "Ein Gast möchte seinen Aufenthalt kurzfristig um zwei Nächte verlängern und ist unsicher, ob das möglich ist.",
+    prompt:
+      "Rollenspiel: Ein Gast kommt an die Rezeption und möchte seinen Aufenthalt spontan um zwei weitere Nächte verlängern, weiß aber nicht, ob das Zimmer noch verfügbar ist. Er ist entspannt, aber gespannt auf die Antwort. Prüfen Sie die Verfügbarkeit und erklären Sie die nächsten Schritte freundlich.",
   },
 
   // --- Autovermietung ---
@@ -2485,9 +2840,100 @@ export const scenarios = [
     category: "autovermietung",
     title: "Kunde bestreitet Schaden",
     kind: "Rollenspiel",
+    difficulty: "hard",
     summary: "Ein Kunde bestreitet vehement, einen Schaden am Mietwagen verursacht zu haben.",
     prompt:
       "Rollenspiel: Ein Kunde gibt das Mietfahrzeug zurück. Sie entdecken eine Delle an der Fahrertür. Der Kunde streitet energisch ab, dafür verantwortlich zu sein, und wird zunehmend lauter. Bleiben Sie ruhig, dokumentieren Sie die Situation professionell und erklären Sie das weitere Vorgehen.",
+  },
+  {
+    id: "fahrzeugkategorie-nicht-verfuegbar-rollenspiel",
+    category: "autovermietung",
+    title: "Gebuchte Fahrzeugkategorie nicht verfügbar",
+    kind: "Rollenspiel",
+    difficulty: "medium",
+    summary: "Ein Kunde steht am Schalter, das gebuchte Fahrzeug ist jedoch nicht verfügbar.",
+    prompt:
+      "Rollenspiel: Ein Kunde steht am Abholschalter und erfährt, dass die von ihm gebuchte Fahrzeugkategorie gerade nicht verfügbar ist. Er ist genervt, weil er einen wichtigen Termin erreichen muss. Entschuldigen Sie sich und bieten Sie zügig eine gleichwertige oder bessere Alternative an.",
+  },
+  {
+    id: "verspaetete-rueckgabe-gebuehr-rollenspiel",
+    category: "autovermietung",
+    title: "Zusatzgebühr wegen später Rückgabe",
+    kind: "Rollenspiel",
+    difficulty: "medium",
+    summary: "Ein Kunde ist überrascht und verärgert über eine Zusatzgebühr für die verspätete Fahrzeugrückgabe.",
+    prompt:
+      "Rollenspiel: Ein Kunde beschwert sich am Schalter über eine Zusatzgebühr, die ihm für eine um zwei Stunden verspätete Rückgabe berechnet wurde. Er kannte diese Regelung angeblich nicht und ist verärgert. Erklären Sie die Richtlinie sachlich und prüfen Sie, ob eine Kulanzlösung möglich ist.",
+  },
+  {
+    id: "versicherung-deckungsumfang-verwirrt-rollenspiel",
+    category: "autovermietung",
+    title: "Unklarheit über Versicherungsschutz",
+    kind: "Rollenspiel",
+    difficulty: "easy",
+    summary: "Ein Kunde ist sich unsicher, was seine gebuchte Versicherung im Schadensfall tatsächlich abdeckt.",
+    prompt:
+      "Rollenspiel: Ein Kunde ruft vor der Abholung an, weil er genau wissen möchte, was seine gebuchte Versicherung im Schadensfall abdeckt und was nicht. Er ist nicht ungeduldig, nur vorsichtig und gründlich. Erklären Sie die Deckungsdetails einfach und verständlich.",
+  },
+  {
+    id: "kaution-nicht-freigegeben-rollenspiel",
+    category: "autovermietung",
+    title: "Kaution wurde nicht zurückerstattet",
+    kind: "Rollenspiel",
+    difficulty: "medium",
+    summary: "Ein Kunde bemerkt Wochen nach der Rückgabe, dass seine Kaution noch nicht zurückerstattet wurde.",
+    prompt:
+      "Rollenspiel: Ein Kunde ruft besorgt an, weil seine Kaution mehrere Wochen nach der problemlosen Fahrzeugrückgabe immer noch nicht auf seinem Konto eingegangen ist. Er macht sich zunehmend Sorgen um sein Geld. Prüfen Sie den Vorgang und erklären Sie transparent die nächsten Schritte.",
+  },
+  {
+    id: "zusatzfahrer-hinzufuegen-rollenspiel",
+    category: "autovermietung",
+    title: "Zusatzfahrer kurzfristig hinzufügen",
+    kind: "Rollenspiel",
+    difficulty: "easy",
+    summary: "Ein Kunde möchte kurz vor der Abholung noch einen zweiten Fahrer zur Buchung hinzufügen.",
+    prompt:
+      "Rollenspiel: Ein Kunde ruft kurz vor der geplanten Abholung an und möchte einen zusätzlichen Fahrer zu seiner bestehenden Buchung hinzufügen. Er ist freundlich, möchte aber eine klare Zusage, dass es rechtzeitig funktioniert. Erklären Sie den Ablauf und die benötigten Unterlagen verbindlich.",
+  },
+  {
+    id: "tankregelung-missverstaendnis-rollenspiel",
+    category: "autovermietung",
+    title: "Missverständnis bei der Tankregelung",
+    kind: "Rollenspiel",
+    difficulty: "easy",
+    summary: "Ein Kunde hat das Fahrzeug voll aufgetankt zurückgegeben, obwohl eine andere Regelung vereinbart war.",
+    prompt:
+      "Rollenspiel: Ein Kunde ruft irritiert an, weil er das Fahrzeug voll aufgetankt zurückgegeben hat, in der Buchung aber offenbar eine andere Tankregelung vereinbart war und er nun eine unerwartete Abrechnung sieht. Er ist verwirrt, nicht wütend. Erklären Sie die Regelung klar und prüfen Sie eine faire Lösung.",
+  },
+  {
+    id: "unfallschaden-vor-ort-rollenspiel",
+    category: "autovermietung",
+    title: "Kleiner Unfall während der Mietzeit",
+    kind: "Rollenspiel",
+    difficulty: "hard",
+    summary: "Ein Kunde meldet einen kleinen Unfall während der Mietzeit und ist erkennbar aufgewühlt.",
+    prompt:
+      "Rollenspiel: Ein Kunde ruft während seiner Mietzeit an, um einen kleinen Verkehrsunfall mit dem Mietfahrzeug zu melden. Er ist unverletzt, aber sichtlich aufgewühlt und unsicher, was jetzt zu tun ist. Beruhigen Sie ihn und führen Sie ihn ruhig durch die nächsten Schritte.",
+  },
+  {
+    id: "vorzeitige-rueckgabe-erstattung-rollenspiel",
+    category: "autovermietung",
+    title: "Vorzeitige Rückgabe und Erstattungsfrage",
+    kind: "Rollenspiel",
+    difficulty: "medium",
+    summary: "Ein Kunde gibt das Fahrzeug mehrere Tage früher zurück und erwartet eine anteilige Rückerstattung.",
+    prompt:
+      "Rollenspiel: Ein Kunde gibt das Mietfahrzeug drei Tage früher als geplant zurück und erwartet am Schalter eine sofortige anteilige Rückerstattung. Er ist zügig unterwegs und möchte keine lange Diskussion. Erklären Sie die Rückerstattungsrichtlinie klar und zeitnah.",
+  },
+  {
+    id: "fahrzeug-verschmutzt-uebergabe-rollenspiel",
+    category: "autovermietung",
+    title: "Fahrzeug bei Abholung nicht sauber",
+    kind: "Rollenspiel",
+    difficulty: "medium",
+    summary: "Ein Kunde ist verärgert, weil das übergebene Fahrzeug innen sichtbar verschmutzt ist.",
+    prompt:
+      "Rollenspiel: Ein Kunde beschwert sich direkt bei der Fahrzeugübergabe, dass das Auto innen sichtbar verschmutzt ist und er das so nicht mitnehmen möchte. Er ist verärgert über den ersten Eindruck. Entschuldigen Sie sich professionell und bieten Sie eine schnelle Lösung an.",
   },
 ];
 
