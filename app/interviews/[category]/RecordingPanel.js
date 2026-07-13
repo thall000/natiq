@@ -131,7 +131,7 @@ export default function RecordingPanel({ scenario, onAdvance, advanceLabel, onTr
 
       {status === STATUS.IDLE && referenceRevealed && (
         <div
-          className="card"
+          className="card fade-in"
           style={{ borderLeft: "3px solid var(--accent-reference)", background: "var(--background)" }}
         >
           <h3
@@ -166,13 +166,13 @@ export default function RecordingPanel({ scenario, onAdvance, advanceLabel, onTr
       )}
 
       {status === STATUS.RECORDING && (
-        <p style={{ color: "var(--muted)", fontSize: "0.9rem" }}>
+        <p className="fade-in" style={{ color: "var(--muted)", fontSize: "0.9rem" }}>
           Aufnahme läuft … sprechen Sie jetzt.
         </p>
       )}
 
       {status === STATUS.TRANSCRIBING && (
-        <p style={{ color: "var(--muted)", fontSize: "0.9rem" }}>
+        <p className="fade-in" style={{ color: "var(--muted)", fontSize: "0.9rem" }}>
           Transkription läuft …
         </p>
       )}
@@ -180,7 +180,7 @@ export default function RecordingPanel({ scenario, onAdvance, advanceLabel, onTr
       {audioUrl && <audio controls src={audioUrl} style={{ width: "100%" }} />}
 
       {transcript && (
-        <div className="card">
+        <div className="card fade-in">
           <h3
             style={{
               fontSize: "0.95rem",
@@ -201,13 +201,13 @@ export default function RecordingPanel({ scenario, onAdvance, advanceLabel, onTr
       )}
 
       {status === STATUS.FEEDBACK_LOADING && (
-        <p style={{ color: "var(--muted)" }}>Feedback wird erstellt …</p>
+        <p className="fade-in" style={{ color: "var(--muted)" }}>Feedback wird erstellt …</p>
       )}
 
       {feedback && <FeedbackDisplay feedback={feedback} />}
 
       {errorMessage && (
-        <p style={{ color: "var(--danger)", fontSize: "0.9rem" }}>{errorMessage}</p>
+        <p className="fade-in form-error">{errorMessage}</p>
       )}
 
       {status === STATUS.RECORDED && !onTranscriptReady && (

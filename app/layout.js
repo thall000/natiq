@@ -47,7 +47,7 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html
-      lang="en"
+      lang="de"
       className={`${sourceSerif.variable} ${sourceSans.variable} ${arefRuqaa.variable}`}
       suppressHydrationWarning
     >
@@ -68,7 +68,7 @@ export default function RootLayout({ children }) {
                 flexWrap: "wrap",
               }}
             >
-              <Link href="/" style={{ display: "inline-block" }}>
+              <Link href="/" className="logo-link">
                 <Logo variant="compact" />
               </Link>
               <div style={{ display: "flex", gap: "1rem", alignItems: "center" }}>

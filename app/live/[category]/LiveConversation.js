@@ -311,7 +311,7 @@ export default function LiveConversation({ scenarioPrompt, categoryId, scenarioT
           {messages.map((m, i) => (
             <div
               key={i}
-              className="card"
+              className="card fade-in"
               style={{
                 alignSelf: m.role === "assistant" ? "flex-start" : "flex-end",
                 maxWidth: "85%",
@@ -331,12 +331,26 @@ export default function LiveConversation({ scenarioPrompt, categoryId, scenarioT
       )}
 
       {phase === PHASE.AI_LOADING && (
-        <p style={{ color: "var(--muted)", fontSize: "0.9rem" }}>Der Kunde antwortet …</p>
+        <p className="fade-in" style={{ color: "var(--muted)", fontSize: "0.9rem", display: "flex", alignItems: "center", gap: "0.6rem" }}>
+          Der Kunde antwortet
+          <span className="speaking-indicator">
+            <span />
+            <span />
+            <span />
+          </span>
+        </p>
       )}
 
       {phase === PHASE.AI_SPEAKING && (
-        <p style={{ color: "var(--muted)", fontSize: "0.9rem" }}>
-          {audioStarted ? "Der Kunde spricht …" : "Kunde spricht gleich …"}
+        <p className="fade-in" style={{ color: "var(--muted)", fontSize: "0.9rem", display: "flex", alignItems: "center", gap: "0.6rem" }}>
+          {audioStarted ? "Der Kunde spricht" : "Kunde spricht gleich"}
+          {audioStarted && (
+            <span className="speaking-indicator">
+              <span />
+              <span />
+              <span />
+            </span>
+          )}
         </p>
       )}
 
@@ -349,7 +363,7 @@ export default function LiveConversation({ scenarioPrompt, categoryId, scenarioT
         />
       )}
 
-      {errorMessage && <p style={{ color: "var(--danger)", fontSize: "0.9rem" }}>{errorMessage}</p>}
+      {errorMessage && <p className="fade-in form-error">{errorMessage}</p>}
 
       {phase !== PHASE.INTRO && phase !== PHASE.ENDING && phase !== PHASE.ENDED && (
         <button
@@ -362,7 +376,7 @@ export default function LiveConversation({ scenarioPrompt, categoryId, scenarioT
       )}
 
       {phase === PHASE.ENDING && (
-        <p style={{ color: "var(--muted)" }}>Feedback wird erstellt …</p>
+        <p className="fade-in" style={{ color: "var(--muted)" }}>Feedback wird erstellt …</p>
       )}
 
       {feedback && <FeedbackDisplay feedback={feedback} />}

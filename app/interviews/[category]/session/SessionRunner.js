@@ -45,7 +45,7 @@ export default function SessionRunner({ categoryId, initialQuestions }) {
 
   if (done) {
     return (
-      <div className="card" style={{ borderLeft: "4px solid var(--accent)" }}>
+      <div className="card fade-in" style={{ borderLeft: "4px solid var(--accent)" }}>
         <h2 style={{ fontSize: "1.15rem", fontWeight: 600, marginBottom: "0.5rem" }}>
           Sitzung abgeschlossen
         </h2>

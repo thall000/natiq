@@ -1,6 +1,80 @@
+"use client";
+
+import { useEffect, useState } from "react";
+
+function ScoreRing({ score, max = 10, size = 84, strokeWidth = 7 }) {
+  const [ready, setReady] = useState(false);
+  const [displayScore, setDisplayScore] = useState(0);
+
+  useEffect(() => {
+    const armId = requestAnimationFrame(() => setReady(true));
+    return () => cancelAnimationFrame(armId);
+  }, []);
+
+  useEffect(() => {
+    if (!ready) return;
+    const duration = 700;
+    const start = performance.now();
+    let frameId;
+    const tick = (now) => {
+      const progress = Math.min(1, (now - start) / duration);
+      setDisplayScore(Math.round(progress * score * 10) / 10);
+      if (progress < 1) frameId = requestAnimationFrame(tick);
+    };
+    frameId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frameId);
+  }, [ready, score]);
+
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const fraction = ready ? Math.max(0, Math.min(1, score / max)) : 0;
+  const offset = circumference * (1 - fraction);
+
+  return (
+    <div style={{ position: "relative", width: size, height: size, flexShrink: 0 }}>
+      <svg width={size} height={size} style={{ transform: "rotate(-90deg)" }}>
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          stroke="var(--border-soft)"
+          strokeWidth={strokeWidth}
+          fill="none"
+        />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          stroke="var(--accent)"
+          strokeWidth={strokeWidth}
+          fill="none"
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={offset}
+          style={{ transition: "stroke-dashoffset 700ms ease-out" }}
+        />
+      </svg>
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: "1.4rem",
+          fontWeight: 700,
+          color: "var(--accent)",
+        }}
+      >
+        {displayScore.toFixed(1)}
+      </div>
+    </div>
+  );
+}
+
 export default function FeedbackDisplay({ feedback }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "1.75rem" }}>
+    <div className="fade-in-stagger" style={{ display: "flex", flexDirection: "column", gap: "1.75rem" }}>
       {typeof feedback.score === "number" && (
         <div
           className="card"
@@ -13,17 +87,7 @@ export default function FeedbackDisplay({ feedback }) {
             gap: "1.5rem",
           }}
         >
-          <div
-            style={{
-              fontSize: "2.75rem",
-              fontWeight: 700,
-              color: "var(--accent)",
-              lineHeight: 1,
-              whiteSpace: "nowrap",
-            }}
-          >
-            {feedback.score}/10
-          </div>
+          <ScoreRing score={feedback.score} />
           {feedback.scoreJustification && (
             <p style={{ fontSize: "1rem" }}>{feedback.scoreJustification}</p>
           )}

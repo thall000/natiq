@@ -52,6 +52,23 @@ export default function HandsFreeRecorder({ stream, audioContext, onTranscriptRe
   const analyserRef = useRef(null);
   const dataArrayRef = useRef(null);
   const rafRef = useRef(null);
+
+  // Live mic-level bars: updated directly via refs (not React state) so the meter
+  // can repaint every animation frame without triggering a re-render per frame.
+  const barRefs = useRef([]);
+
+  function updateBars(rms) {
+    const bars = barRefs.current;
+    if (!bars.length) return;
+    const amplified = Math.min(1, rms * 14);
+    const now = performance.now();
+    bars.forEach((bar, i) => {
+      if (!bar) return;
+      const variance = 0.65 + 0.35 * Math.sin(i * 1.7 + now / 180);
+      const height = Math.max(0.12, Math.min(1, 0.12 + amplified * variance));
+      bar.style.transform = `scaleY(${height})`;
+    });
+  }
   const retryTimeoutRef = useRef(null);
   const lastMonitorTimeRef = useRef(null);
   const stoppedRef = useRef(false);
@@ -104,6 +121,7 @@ export default function HandsFreeRecorder({ stream, audioContext, onTranscriptRe
     if (analyserRef.current) analyserRef.current.disconnect();
     analyserRef.current = null;
     dataArrayRef.current = null;
+    updateBars(0);
     // NOTE: stream/audioContext are NOT stopped/closed here — they're owned by the
     // parent for the whole conversation, not per-turn.
   }
@@ -152,6 +170,7 @@ export default function HandsFreeRecorder({ stream, audioContext, onTranscriptRe
     if (!analyser || !dataArray || stoppedRef.current) return;
 
     const rms = readRms(analyser, dataArray);
+    updateBars(rms);
     const now = performance.now();
     if (calibrationStartTimeRef.current === null) {
       calibrationStartTimeRef.current = now;
@@ -247,6 +266,7 @@ export default function HandsFreeRecorder({ stream, audioContext, onTranscriptRe
     if (!analyser || !dataArray || stoppedRef.current) return;
 
     const rms = readRms(analyser, dataArray);
+    updateBars(rms);
     const now = performance.now();
     const frameDelta = lastMonitorTimeRef.current === null ? 0 : now - lastMonitorTimeRef.current;
     lastMonitorTimeRef.current = now;
@@ -369,29 +389,34 @@ export default function HandsFreeRecorder({ stream, audioContext, onTranscriptRe
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
       {status === STATUS.INIT && (
-        <p style={{ color: "var(--muted)", fontSize: "0.9rem" }}>Mikrofon wird aktiviert …</p>
+        <p className="fade-in" style={{ color: "var(--muted)", fontSize: "0.9rem" }}>Mikrofon wird aktiviert …</p>
       )}
-      {status === STATUS.CALIBRATING && (
-        <p style={{ color: "var(--muted)", fontSize: "0.9rem" }}>Kalibrierung …</p>
+
+      {(status === STATUS.CALIBRATING || status === STATUS.LISTENING || status === STATUS.RECORDING) && (
+        <div className="fade-in" style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+          <div className="mic-bars">
+            {[0, 1, 2, 3, 4].map((i) => (
+              <div key={i} className="mic-bar" ref={(el) => (barRefs.current[i] = el)} />
+            ))}
+          </div>
+          <p style={{ color: "var(--muted)", fontSize: "0.9rem" }}>
+            {status === STATUS.CALIBRATING && "Kalibrierung …"}
+            {status === STATUS.LISTENING && "Hören zu … sprechen Sie, wenn Sie bereit sind."}
+            {status === STATUS.RECORDING && "Sie sprechen …"}
+          </p>
+        </div>
       )}
-      {status === STATUS.LISTENING && (
-        <p style={{ color: "var(--muted)", fontSize: "0.9rem" }}>
-          Hören zu … sprechen Sie, wenn Sie bereit sind.
-        </p>
-      )}
-      {status === STATUS.RECORDING && (
-        <p style={{ color: "var(--muted)", fontSize: "0.9rem" }}>Sie sprechen …</p>
-      )}
+
       {status === STATUS.TRANSCRIBING && (
-        <p style={{ color: "var(--muted)", fontSize: "0.9rem" }}>Transkription läuft …</p>
+        <p className="fade-in" style={{ color: "var(--muted)", fontSize: "0.9rem" }}>Transkription läuft …</p>
       )}
       {status === STATUS.MIC_ERROR && (
-        <p style={{ color: "var(--danger)", fontSize: "0.9rem" }}>
+        <p className="fade-in form-error">
           Mikrofonzugriff wurde verweigert oder ist nicht verfügbar.
         </p>
       )}
       {status === STATUS.TRANSCRIBE_ERROR && (
-        <p style={{ color: "var(--danger)", fontSize: "0.9rem" }}>
+        <p className="fade-in form-error">
           Transkription fehlgeschlagen. Wir hören gleich erneut zu …
         </p>
       )}
