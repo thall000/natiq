@@ -13,7 +13,7 @@ const STATUS = {
   ERROR: "error",
 };
 
-export default function RecordingPanel({ scenario, onAdvance, advanceLabel, onTranscriptReady }) {
+export default function RecordingPanel({ scenario, onAdvance, advanceLabel, onTranscriptReady, onFeedbackReady }) {
   const [status, setStatus] = useState(STATUS.IDLE);
   const [transcript, setTranscript] = useState("");
   const [audioUrl, setAudioUrl] = useState(null);
@@ -94,13 +94,14 @@ export default function RecordingPanel({ scenario, onAdvance, advanceLabel, onTr
       const data = await res.json();
       setFeedback(data.feedback);
       setStatus(STATUS.FEEDBACK_READY);
+      onFeedbackReady?.({ transcript, feedback: data.feedback });
     } catch (err) {
       setErrorMessage(
         "Feedback konnte nicht geladen werden. Bitte versuchen Sie es erneut."
       );
       setStatus(STATUS.RECORDED);
     }
-  }, [transcript, scenario.prompt]);
+  }, [transcript, scenario.prompt, onFeedbackReady]);
 
   const reset = () => {
     setStatus(STATUS.IDLE);

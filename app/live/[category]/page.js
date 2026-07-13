@@ -42,7 +42,11 @@ export default async function LiveRoomPage({ params }) {
         <p style={{ fontSize: "1.1rem" }}>{scenario.prompt}</p>
       </div>
 
-      <LiveConversation scenarioPrompt={scenario.prompt} />
+      <LiveConversation
+        scenarioPrompt={scenario.prompt}
+        categoryId={categoryId}
+        scenarioTitle={scenario.title}
+      />
     </main>
   );
 }

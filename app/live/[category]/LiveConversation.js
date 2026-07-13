@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useSession } from "next-auth/react";
 import HandsFreeRecorder from "./HandsFreeRecorder";
 import FeedbackDisplay from "../../components/FeedbackDisplay";
 
@@ -33,7 +34,8 @@ async function synthesizeSentence(text) {
   return URL.createObjectURL(audioBlob);
 }
 
-export default function LiveConversation({ scenarioPrompt }) {
+export default function LiveConversation({ scenarioPrompt, categoryId, scenarioTitle }) {
+  const { data: authSession } = useSession();
   const [phase, setPhase] = useState(PHASE.INTRO);
   const [messages, setMessages] = useState([]);
   const [feedback, setFeedback] = useState(null);
@@ -262,11 +264,27 @@ export default function LiveConversation({ scenarioPrompt }) {
       const data = await res.json();
       setFeedback(data.feedback);
       setPhase(PHASE.ENDED);
+
+      if (authSession?.user) {
+        fetch("/api/progress/conversation", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            category: categoryId,
+            scenarioTitle,
+            scenarioPrompt,
+            score: data.feedback?.score,
+            feedback: data.feedback,
+          }),
+        }).catch(() => {
+          // Best-effort save — a failed save shouldn't block showing the feedback.
+        });
+      }
     } catch (err) {
       setErrorMessage("Feedback konnte nicht geladen werden. Bitte versuchen Sie es erneut.");
       setPhase(PHASE.ENDED);
     }
-  }, [scenarioPrompt, messages, stopSpeaking, releaseMic]);
+  }, [scenarioPrompt, messages, stopSpeaking, releaseMic, authSession, categoryId, scenarioTitle]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
