@@ -20,13 +20,20 @@ content — not just "correct" or "incorrect."
   feedback (score, grammar corrections, natural-phrasing suggestions, content ideas, and a
   model answer).
 - **Live AI conversations** (`/live`) — A hands-free, real-time roleplay against an AI
-  customer persona. You speak, voice activity detection (VAD) automatically detects when
-  your turn ends (no push-to-talk button), your speech is transcribed, the AI customer
-  replies in character with synthesized speech, and the conversation continues turn by
-  turn. Feedback on your entire performance is generated once you end the conversation.
+  customer persona, with 10 scenarios per industry (50 total), each varying the customer's
+  mood, difficulty, and situation. You speak, voice activity detection (VAD) automatically
+  detects when your turn ends (no push-to-talk button, with a live mic-level meter so the
+  hands-free flow stays legible), your speech is transcribed, the AI customer replies in
+  character with synthesized speech, and the conversation continues turn by turn. Feedback
+  on your entire performance is generated once you end the conversation.
 - **Customer Care Bible** (`/vocabulary`) — A reference glossary of customer-service German
   vocabulary (nouns, verbs, adjectives, phrases) organized by topic, with tap-to-reveal
   English and Arabic translations.
+- **Optional accounts & saved progress** (`/anmelden`, `/registrieren`, `/fortschritt`) —
+  Create an account (email + password) to have your completed practice sessions and live
+  conversation results saved and listed newest-first on **Mein Fortschritt**. Accounts are
+  entirely optional — every feature above works fully without signing in; logged-out users
+  just don't get history saved.
 
 ## Tech stack
 
@@ -39,8 +46,13 @@ content — not just "correct" or "incorrect."
 - **Piper TTS** (local, offline) — synthesizes the AI customer's spoken replies in the live
   conversation feature, using the German `de_DE-thorsten-high` voice. Runs as a local
   child process, not a cloud API.
+- **Auth.js (next-auth) v5** with a Credentials provider — self-hosted email/password auth,
+  no external auth service. Passwords are hashed with `@node-rs/bcrypt`.
+- **SQLite** (via `better-sqlite3`, raw SQL, no ORM) for user accounts and saved progress —
+  a single local file at `data/natiq.db`, gitignored.
 - Plain JavaScript (no TypeScript), CSS via `globals.css` with CSS variables for theming
-  (light/dark mode).
+  (light/dark mode) and a small set of shared motion utilities (fade-in transitions, an
+  animated score ring, a live mic-level meter).
 
 > **Note on the Next.js version:** this project intentionally pins a Next.js release that
 > is *not* the Next.js most tooling and training data expects — see `AGENTS.md` at the repo
@@ -58,7 +70,8 @@ content — not just "correct" or "incorrect."
   persona, and feedback generation — Groq's free tier is what this project currently runs
   on).
 - **Piper TTS**, set up separately (see below) — required only for the **live conversation**
-  feature. Static interview practice and the vocabulary reference work without it.
+  feature. Static interview practice, the vocabulary reference, and accounts/saved progress
+  all work without it.
 
 ### 2. Install and configure
 
@@ -70,7 +83,13 @@ Create `.env.local` in the project root:
 
 ```
 GROQ_API_KEY=your_groq_api_key_here
+AUTH_SECRET=generate_a_random_string_here
 ```
+
+Generate `AUTH_SECRET` with, e.g., `openssl rand -base64 32` (or any random 32+ character
+string) — it's used to sign session tokens. The dev server will print a clear startup
+warning naming any missing required variable, and API routes that need `GROQ_API_KEY` fail
+with a message telling you exactly that, rather than a cryptic upstream error.
 
 (`ANTHROPIC_API_KEY` is not currently used by any route — feedback and conversation
 generation both run on Groq's Llama 3.3 for now. See `PROJECT_CONTEXT.md` for why.)
@@ -107,7 +126,8 @@ The dev server spawns `piper.exe` as a persistent child process on first request
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+Open [http://localhost:3000](http://localhost:3000). The SQLite database file is created
+automatically on first use at `data/natiq.db` — no setup step needed, and it's gitignored.
 
 ## Project docs
 

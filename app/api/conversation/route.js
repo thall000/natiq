@@ -2,6 +2,8 @@
 // persona described in the scenario, one short line at a time, reacting to the
 // trainee's transcribed replies so far.
 
+import { getGroqApiKey } from "../../../lib/env";
+
 function buildSystemPrompt(scenarioPrompt) {
   return (
     "Du spielst in einem Rollenspiel die Rolle eines Kunden/einer Kundin in einem deutschsprachigen Kundenservice-Gespräch. " +
@@ -22,6 +24,13 @@ function buildSystemPrompt(scenarioPrompt) {
 }
 
 export async function POST(request) {
+  let groqApiKey;
+  try {
+    groqApiKey = getGroqApiKey();
+  } catch (err) {
+    return Response.json({ error: err.message }, { status: 500 });
+  }
+
   const { scenarioPrompt, messages } = await request.json();
 
   const history =
@@ -32,7 +41,7 @@ export async function POST(request) {
   const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+      Authorization: `Bearer ${groqApiKey}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({

@@ -4,6 +4,8 @@
 // just this fetch call (same pattern as the transcription provider in
 // app/api/transcribe/route.js).
 
+import { getGroqApiKey } from "../../../lib/env";
+
 const SYSTEM_PROMPT =
   "Du bist ein einfühlsamer Sprechtrainer für Bewerber, die sich auf deutschsprachige Kundenservice-Interviews (BPO) vorbereiten. " +
   "Du gibst deine Rückmeldung als JSON-Objekt mit genau diesen fünf Feldern zurück:\n" +
@@ -44,12 +46,19 @@ const SYSTEM_PROMPT =
   "Antworte ausschließlich mit dem JSON-Objekt, alle Textinhalte auf Deutsch.";
 
 export async function POST(request) {
+  let groqApiKey;
+  try {
+    groqApiKey = getGroqApiKey();
+  } catch (err) {
+    return Response.json({ error: err.message }, { status: 500 });
+  }
+
   const { transcript, scenarioPrompt } = await request.json();
 
   const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+      Authorization: `Bearer ${groqApiKey}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({

@@ -14,6 +14,12 @@ const PHASE = {
   ENDED: "ended",
 };
 
+// [leak-check]/[speak-check] instrumentation is dev-only diagnostic noise for
+// tracking down mic-leak and audio-overlap bugs — silent in production builds.
+const isDev = process.env.NODE_ENV !== "production";
+const devLog = isDev ? (...args) => console.log(...args) : () => {};
+const devWarn = isDev ? (...args) => console.error(...args) : () => {};
+
 // Keeps the punctuation attached to each sentence; a trailing fragment with no
 // sentence-ending punctuation is kept as its own entry.
 function splitIntoSentences(text) {
@@ -69,7 +75,7 @@ export default function LiveConversation({ scenarioPrompt, categoryId, scenarioT
         const value = { stream, audioContext };
         micRef.current = value;
         setMic(value);
-        console.log("[leak-check] Conversation mic ready: 1 AudioContext + 1 getUserMedia stream created for the whole conversation");
+        devLog("[leak-check] Conversation mic ready: 1 AudioContext + 1 getUserMedia stream created for the whole conversation");
       })();
     }
     return micReadyPromiseRef.current;
@@ -81,12 +87,12 @@ export default function LiveConversation({ scenarioPrompt, categoryId, scenarioT
     if (current) {
       const tracks = current.stream.getTracks();
       tracks.forEach((t) => t.stop());
-      console.log(`[leak-check] Conversation mic released: stopped ${tracks.length} track(s)`);
+      devLog(`[leak-check] Conversation mic released: stopped ${tracks.length} track(s)`);
       if (current.audioContext.state !== "closed") {
         current.audioContext
           .close()
-          .then(() => console.log("[leak-check] Conversation AudioContext closed"))
-          .catch((err) => console.error(`[leak-check] Conversation AudioContext close() failed: ${err.message}`));
+          .then(() => devLog("[leak-check] Conversation AudioContext closed"))
+          .catch((err) => devWarn(`[leak-check] Conversation AudioContext close() failed: ${err.message}`));
       }
     }
     micRef.current = null;
@@ -112,7 +118,7 @@ export default function LiveConversation({ scenarioPrompt, categoryId, scenarioT
   // and so on. onDone only fires once the final sentence's audio has finished.
   const speak = useCallback(async (text, onAudioStart, onDone) => {
     const sentences = splitIntoSentences(text);
-    console.log(`[speak-check] speak() called with ${sentences.length} sentence(s):`, sentences);
+    devLog(`[speak-check] speak() called with ${sentences.length} sentence(s):`, sentences);
     if (sentences.length === 0) {
       onDone();
       return;
@@ -150,7 +156,7 @@ export default function LiveConversation({ scenarioPrompt, categoryId, scenarioT
         audioRef.current = audio;
 
         const finish = (eventName) => {
-          console.log(
+          devLog(
             `[speak-check] sentence ${i + 1}/${sentences.length} ${eventName} at t=${performance.now().toFixed(0)}ms`
           );
           if (currentlyPlayingIndex === i) currentlyPlayingIndex = null;
@@ -163,7 +169,7 @@ export default function LiveConversation({ scenarioPrompt, categoryId, scenarioT
           finish("cancelled");
         };
         audio.onplaying = () => {
-          console.log(
+          devLog(
             `[speak-check] sentence ${i + 1}/${sentences.length} onplaying at t=${performance.now().toFixed(0)}ms`
           );
           if (!audioStartFired) {
@@ -175,13 +181,13 @@ export default function LiveConversation({ scenarioPrompt, categoryId, scenarioT
         audio.onerror = () => finish("onerror");
 
         if (currentlyPlayingIndex !== null) {
-          console.error(
+          devWarn(
             `[speak-check] OVERLAP DETECTED: about to play() sentence ${i + 1} while sentence ` +
               `${currentlyPlayingIndex + 1} has not fired onended/onerror yet`
           );
         }
         currentlyPlayingIndex = i;
-        console.log(
+        devLog(
           `[speak-check] sentence ${i + 1}/${sentences.length} play() called at t=${performance.now().toFixed(0)}ms`
         );
         audio.play().catch(() => finish("play-error"));

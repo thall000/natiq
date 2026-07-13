@@ -7,6 +7,8 @@
 // Swapping back to Claude for better feedback quality later is an isolated change,
 // just this fetch call.
 
+import { getGroqApiKey } from "../../../lib/env";
+
 const SYSTEM_PROMPT =
   "Du bist ein einfühlsamer Sprechtrainer für Bewerber, die sich auf deutschsprachige Kundenservice-Interviews (BPO) vorbereiten. " +
   "Du bekommst das Transkript eines geübten Rollenspiel-Gesprächs: „Kunde\" ist eine KI-gespielte Kundenpersona, „Sie\" ist die " +
@@ -68,12 +70,19 @@ function formatTranscript(messages) {
 }
 
 export async function POST(request) {
+  let groqApiKey;
+  try {
+    groqApiKey = getGroqApiKey();
+  } catch (err) {
+    return Response.json({ error: err.message }, { status: 500 });
+  }
+
   const { scenarioPrompt, messages } = await request.json();
 
   const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+      Authorization: `Bearer ${groqApiKey}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({

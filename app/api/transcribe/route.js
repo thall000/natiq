@@ -1,3 +1,5 @@
+import { getGroqApiKey } from "../../../lib/env";
+
 export const maxDuration = 30;
 
 // Bias transcription toward domain vocabulary that Whisper otherwise frequently
@@ -8,6 +10,13 @@ const VOCABULARY_PROMPT =
   "Buchung, Stornierung, Reservierung, Mietwagen, Kaution, Vollkasko.";
 
 export async function POST(request) {
+  let groqApiKey;
+  try {
+    groqApiKey = getGroqApiKey();
+  } catch (err) {
+    return Response.json({ error: err.message }, { status: 500 });
+  }
+
   const formData = await request.formData();
   const audio = formData.get("audio");
 
@@ -19,7 +28,7 @@ export async function POST(request) {
 
   const res = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
     method: "POST",
-    headers: { Authorization: `Bearer ${process.env.GROQ_API_KEY}` },
+    headers: { Authorization: `Bearer ${groqApiKey}` },
     body: upstreamForm,
   });
 
