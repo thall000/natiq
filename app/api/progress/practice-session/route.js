@@ -12,6 +12,6 @@ export async function POST(request) {
     return Response.json({ error: "Ungültige Sitzungsdaten." }, { status: 400 });
   }
 
-  savePracticeSession(Number(session.user.id), category, questions);
+  await savePracticeSession(Number(session.user.id), category, questions);
   return Response.json({ success: true });
 }

@@ -12,7 +12,7 @@ export async function POST(request) {
     return Response.json({ error: "Ungültige Gesprächsdaten." }, { status: 400 });
   }
 
-  saveConversationResult(Number(session.user.id), {
+  await saveConversationResult(Number(session.user.id), {
     category,
     scenarioTitle,
     scenarioPrompt,

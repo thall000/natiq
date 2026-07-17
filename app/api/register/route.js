@@ -19,7 +19,7 @@ export async function POST(request) {
       { status: 400 }
     );
   }
-  if (getUserByEmail(normalizedEmail)) {
+  if (await getUserByEmail(normalizedEmail)) {
     return Response.json(
       { error: "Für diese E-Mail-Adresse existiert bereits ein Konto." },
       { status: 409 }
@@ -27,7 +27,7 @@ export async function POST(request) {
   }
 
   const passwordHash = await hash(password.toString(), 10);
-  createUser(normalizedEmail, passwordHash);
+  await createUser(normalizedEmail, passwordHash);
 
   return Response.json({ success: true });
 }

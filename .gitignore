@@ -36,9 +36,6 @@ yarn-error.log*
 # vercel
 .vercel
 
-# local sqlite database (Phase 1: accounts & saved progress)
-/data/
-
 # typescript
 *.tsbuildinfo
 next-env.d.ts

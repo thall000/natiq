@@ -13,6 +13,9 @@ export async function register() {
           : "") +
         (missing.includes("AUTH_SECRET")
           ? "Without AUTH_SECRET, sign-in/sign-up will fail.\n"
+          : "") +
+        (missing.some((v) => v.startsWith("TURSO_"))
+          ? "Without the TURSO_* database credentials, accounts and saved progress will fail.\n"
           : "")
     );
   }

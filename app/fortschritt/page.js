@@ -109,8 +109,8 @@ export default async function ProgressPage() {
   }
 
   const userId = Number(session.user.id);
-  const practiceSessions = getPracticeSessionsForUser(userId);
-  const conversationResults = getConversationResultsForUser(userId);
+  const practiceSessions = await getPracticeSessionsForUser(userId);
+  const conversationResults = await getConversationResultsForUser(userId);
 
   const noHistory = practiceSessions.length === 0 && conversationResults.length === 0;
 
