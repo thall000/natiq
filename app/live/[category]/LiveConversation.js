@@ -125,7 +125,7 @@ export default function LiveConversation({ scenarioPrompt, categoryId, scenarioT
   // (and the whole category of mount/unmount races that came with it) entirely.
   // `mic` (state) is what gets passed to render; `micRef` mirrors it for imperative
   // access from releaseMic()/ensureMicReady(), which must never read refs at render time.
-  const [mic, setMic] = useState(null); // { stream, audioContext, appliedMicSettings } | null
+  const [mic, setMic] = useState(null); // { stream, audioContext } | null
   const micRef = useRef(null);
   const micReadyPromiseRef = useRef(null);
 
@@ -135,23 +135,11 @@ export default function LiveConversation({ scenarioPrompt, categoryId, scenarioT
     }
     if (!micReadyPromiseRef.current) {
       micReadyPromiseRef.current = (async () => {
-        // autoGainControl is deliberately off: the browser's AGC keeps boosting mic
-        // gain after the user stops speaking, which lifts the ambient noise floor
-        // above the calibrated silence threshold and turn-end silence never
-        // accumulates (see the rolling noise-floor tracking in HandsFreeRecorder,
-        // which is the defense-in-depth for cases where a device ignores this
-        // constraint and applies AGC anyway).
         const stream = await navigator.mediaDevices.getUserMedia({
-          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: false },
+          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
         });
         const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        // Browsers can silently ignore constraints (some devices force AGC on
-        // regardless, for example), so read back what was actually granted rather
-        // than assume the request was honored. Surfaced in the ?vaddebug=1 overlay.
-        const [track] = stream.getAudioTracks();
-        const appliedMicSettings = track ? track.getSettings() : null;
-        devLog("[leak-check] Mic constraints actually applied:", appliedMicSettings);
-        const value = { stream, audioContext, appliedMicSettings };
+        const value = { stream, audioContext };
         micRef.current = value;
         setMic(value);
         devLog("[leak-check] Conversation mic ready: 1 AudioContext + 1 getUserMedia stream created for the whole conversation");
@@ -467,7 +455,6 @@ export default function LiveConversation({ scenarioPrompt, categoryId, scenarioT
           stream={mic.stream}
           audioContext={mic.audioContext}
           onTranscriptReady={handleUserTranscript}
-          appliedMicSettings={mic.appliedMicSettings}
         />
       )}
 
