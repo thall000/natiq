@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 const CALIBRATION_MS = 500; // how long to sample ambient noise before arming speech detection
 const BASELINE_NOISE_MULTIPLIER = 3; // effective speech threshold = measured baseline * this
 const MIN_SPEECH_THRESHOLD = 0.015; // floor under the adaptive threshold, for near-silent rooms
+const NOISE_FLOOR_TIME_CONSTANT_MS = 8000; // how fast the rolling noise floor follows non-speech RMS: ~8s, slow enough that a mid-sentence pause or the 1200ms turn-silence window can't drag it up mid-word, fast enough to track real ambient drift (AC kicking in, etc.) over the course of a turn
 const MIN_SPEECH_MS = 250; // must stay above threshold this long to count as real speech start (debounces clicks/coughs)
 const MIN_TOTAL_SPEECH_MS = 400; // cumulative time above threshold required to treat a segment as real speech, not noise
 const SEGMENT_SILENCE_MS = 600; // pause long enough to close the current segment, but not end the turn (e.g. between sentences)
@@ -80,6 +81,38 @@ export default function HandsFreeRecorder({ stream, audioContext, onTranscriptRe
   const calibrationCountRef = useRef(0);
   const effectiveThresholdRef = useRef(MIN_SPEECH_THRESHOLD);
 
+  // Rolling noise-floor estimate, seeded from calibration but kept live for the rest
+  // of the turn (a slow EMA over non-speech frames — see NOISE_FLOOR_TIME_CONSTANT_MS).
+  // This is what lets the threshold keep tracking ambient drift after calibration ends,
+  // instead of being pinned to a single one-time measurement.
+  const noiseFloorRef = useRef(MIN_SPEECH_THRESHOLD / BASELINE_NOISE_MULTIPLIER);
+
+  // Dev-only debug overlay (?vaddebug=1): DOM refs updated directly per frame, same
+  // reasoning as barRefs/updateBars — this repaints every animation frame and must not
+  // go through React state/re-render.
+  const [vadDebugEnabled] = useState(
+    () =>
+      process.env.NODE_ENV !== "production" &&
+      typeof window !== "undefined" &&
+      new URLSearchParams(window.location.search).get("vaddebug") === "1"
+  );
+  const debugRmsRef = useRef(null);
+  const debugThresholdRef = useRef(null);
+  const debugFloorRef = useRef(null);
+  const debugBarRef = useRef(null);
+
+  function updateDebugOverlay(rms, threshold, floor) {
+    if (!vadDebugEnabled) return;
+    if (debugRmsRef.current) debugRmsRef.current.textContent = rms.toFixed(4);
+    if (debugThresholdRef.current) debugThresholdRef.current.textContent = threshold.toFixed(4);
+    if (debugFloorRef.current) debugFloorRef.current.textContent = floor.toFixed(4);
+    if (debugBarRef.current) {
+      const pct = Math.max(0, Math.min(100, (rms / (threshold * 2)) * 100));
+      debugBarRef.current.style.width = `${pct}%`;
+      debugBarRef.current.style.background = rms > threshold ? "#e05d44" : "#4caf50";
+    }
+  }
+
   // Turn-level speech/silence state. Deliberately untouched by segment boundaries,
   // so a segment closing (or a brand-new, still-empty segment) can never reset it.
   const hasSpokenInTurnRef = useRef(false);
@@ -138,6 +171,7 @@ export default function HandsFreeRecorder({ stream, audioContext, onTranscriptRe
     calibrationStartTimeRef.current = null;
     calibrationSumRef.current = 0;
     calibrationCountRef.current = 0;
+    noiseFloorRef.current = MIN_SPEECH_THRESHOLD / BASELINE_NOISE_MULTIPLIER;
     setStatus(STATUS.INIT);
 
     if (!stream || !audioContext) {
@@ -171,6 +205,7 @@ export default function HandsFreeRecorder({ stream, audioContext, onTranscriptRe
 
     const rms = readRms(analyser, dataArray);
     updateBars(rms);
+    updateDebugOverlay(rms, effectiveThresholdRef.current, noiseFloorRef.current);
     const now = performance.now();
     if (calibrationStartTimeRef.current === null) {
       calibrationStartTimeRef.current = now;
@@ -191,6 +226,7 @@ export default function HandsFreeRecorder({ stream, audioContext, onTranscriptRe
     const baseline = count > 0 ? calibrationSumRef.current / count : 0;
     const threshold = Math.max(baseline * BASELINE_NOISE_MULTIPLIER, MIN_SPEECH_THRESHOLD);
     effectiveThresholdRef.current = threshold;
+    noiseFloorRef.current = baseline;
 
     if (process.env.NODE_ENV !== "production") {
       console.log(
@@ -272,6 +308,7 @@ export default function HandsFreeRecorder({ stream, audioContext, onTranscriptRe
     lastMonitorTimeRef.current = now;
 
     if (rms > effectiveThresholdRef.current) {
+      updateDebugOverlay(rms, effectiveThresholdRef.current, noiseFloorRef.current);
       segmentSpeechDurationRef.current += frameDelta;
       segmentBelowThresholdSinceRef.current = null;
       turnBelowThresholdSinceRef.current = null;
@@ -291,6 +328,22 @@ export default function HandsFreeRecorder({ stream, audioContext, onTranscriptRe
       }
     } else {
       segmentAboveThresholdSinceRef.current = null;
+
+      // Rolling noise-floor update: nudge the floor toward this non-speech frame's
+      // RMS (time-constant EMA, not a flat per-frame step, so it's unaffected by
+      // rAF jitter) and re-derive the threshold from it, the same way
+      // finishCalibration() derives it from the one-time baseline. This is what
+      // keeps the threshold tracking ambient drift for the rest of the turn instead
+      // of staying pinned to the calibration snapshot.
+      if (frameDelta > 0) {
+        const emaAlpha = 1 - Math.exp(-frameDelta / NOISE_FLOOR_TIME_CONSTANT_MS);
+        noiseFloorRef.current += emaAlpha * (rms - noiseFloorRef.current);
+        effectiveThresholdRef.current = Math.max(
+          noiseFloorRef.current * BASELINE_NOISE_MULTIPLIER,
+          MIN_SPEECH_THRESHOLD
+        );
+      }
+      updateDebugOverlay(rms, effectiveThresholdRef.current, noiseFloorRef.current);
 
       // Segment-level pause (shorter threshold): close this segment and open the
       // next one, without affecting the turn-level silence timer below.
@@ -419,6 +472,32 @@ export default function HandsFreeRecorder({ stream, audioContext, onTranscriptRe
         <p className="fade-in form-error">
           Transkription fehlgeschlagen. Wir hören gleich erneut zu …
         </p>
+      )}
+
+      {vadDebugEnabled && (
+        <div
+          style={{
+            position: "fixed",
+            bottom: "1rem",
+            right: "1rem",
+            zIndex: 9999,
+            background: "rgba(0,0,0,0.85)",
+            color: "#fff",
+            fontFamily: "monospace",
+            fontSize: "0.75rem",
+            padding: "0.6rem 0.75rem",
+            borderRadius: "6px",
+            minWidth: "180px",
+          }}
+        >
+          <div style={{ marginBottom: "0.35rem", opacity: 0.7 }}>VAD debug (?vaddebug=1)</div>
+          <div style={{ height: "6px", background: "#333", borderRadius: "3px", marginBottom: "0.35rem", overflow: "hidden" }}>
+            <div ref={debugBarRef} style={{ height: "100%", width: "0%", background: "#4caf50" }} />
+          </div>
+          <div>rms: <span ref={debugRmsRef}>0.0000</span></div>
+          <div>threshold: <span ref={debugThresholdRef}>0.0000</span></div>
+          <div>noise floor: <span ref={debugFloorRef}>0.0000</span></div>
+        </div>
       )}
     </div>
   );

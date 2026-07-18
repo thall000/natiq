@@ -135,8 +135,14 @@ export default function LiveConversation({ scenarioPrompt, categoryId, scenarioT
     }
     if (!micReadyPromiseRef.current) {
       micReadyPromiseRef.current = (async () => {
+        // autoGainControl is deliberately off: the browser's AGC keeps boosting mic
+        // gain after the user stops speaking, which lifts the ambient noise floor
+        // above the calibrated silence threshold and turn-end silence never
+        // accumulates (see the rolling noise-floor tracking in HandsFreeRecorder,
+        // which is the defense-in-depth for cases where a device ignores this
+        // constraint and applies AGC anyway).
         const stream = await navigator.mediaDevices.getUserMedia({
-          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: false },
         });
         const audioContext = new (window.AudioContext || window.webkitAudioContext)();
         const value = { stream, audioContext };
