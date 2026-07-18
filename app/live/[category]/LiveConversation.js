@@ -20,6 +20,13 @@ const isDev = process.env.NODE_ENV !== "production";
 const devLog = isDev ? (...args) => console.log(...args) : () => {};
 const devWarn = isDev ? (...args) => console.error(...args) : () => {};
 
+// How long the VAD gate (see micGatedRef below) stays closed after the AI's last
+// sentence truly finishes playing, before HandsFreeRecorder is allowed to calibrate
+// or listen. Covers acoustic decay / speaker-to-mic bleed and any audio-pipeline
+// buffer flush lag that could otherwise still be audible for a moment after the
+// 'ended' event fires.
+const VAD_GATE_TAIL_MS = 300;
+
 // Keeps the punctuation attached to each sentence; a trailing fragment with no
 // sentence-ending punctuation is kept as its own entry.
 function splitIntoSentences(text) {
@@ -118,6 +125,15 @@ export default function LiveConversation({ scenarioPrompt, categoryId, scenarioT
   const audioRef = useRef(null);
   const cancelPlaybackRef = useRef(null);
 
+  // VAD gate: true while the AI's audio is playing (from the moment speak() is
+  // called until VAD_GATE_TAIL_MS after its last sentence's 'ended' event), false
+  // otherwise. Read every frame by HandsFreeRecorder's calibrate()/monitor() loop —
+  // this is what stops the app from calibrating its silence threshold against, or
+  // recording, its own TTS bleeding through the speakers into the mic. A ref (not
+  // state) because it must be readable synchronously, every animation frame, from
+  // inside HandsFreeRecorder without forcing a re-render of either component.
+  const micGatedRef = useRef(false);
+
   // The mic AudioContext + getUserMedia stream for the WHOLE conversation, created
   // once (on "Gespräch starten") and reused for every turn until the conversation
   // ends — not recreated per turn. This is what HandsFreeRecorder now receives as
@@ -188,22 +204,45 @@ export default function LiveConversation({ scenarioPrompt, categoryId, scenarioT
   // or — if every sentence's synthesis failed while ttsMode is "edge" — after falling back
   // to speakBrowser() for the whole reply.
   const speak = useCallback(async (text, onAudioStart, onDone) => {
+    // Close the VAD gate for the whole multi-sentence sequence, not just individual
+    // clips: from here (before any synthesis/playback attempt) until
+    // VAD_GATE_TAIL_MS after the last sentence's audio truly finishes. This is what
+    // stops HandsFreeRecorder from calibrating against, or recording, the AI's own
+    // voice — see micGatedRef above.
+    micGatedRef.current = true;
+    devLog(`[vad-gate] closed at t=${performance.now().toFixed(0)}ms`);
+
+    // Every exit path from speak() must release the gate exactly once. Paths where
+    // real audio might have played wait out the tail first; paths where nothing was
+    // ever going to play (no synth available, no sentences) release immediately.
+    const finishSpeaking = async () => {
+      await new Promise((resolve) => setTimeout(resolve, VAD_GATE_TAIL_MS));
+      micGatedRef.current = false;
+      devLog(`[vad-gate] opened at t=${performance.now().toFixed(0)}ms`);
+      onDone();
+    };
+    const finishSpeakingImmediately = () => {
+      micGatedRef.current = false;
+      devLog(`[vad-gate] opened at t=${performance.now().toFixed(0)}ms (nothing played)`);
+      onDone();
+    };
+
     if (ttsMode === "browser") {
       const synth = typeof window !== "undefined" ? window.speechSynthesis : null;
       if (!synth) {
         setErrorMessage("Der Kunde konnte nicht vorgelesen werden.");
-        onDone();
+        finishSpeakingImmediately();
         return;
       }
       devLog("[speak-check] speak() using browser speechSynthesis");
-      cancelPlaybackRef.current = speakBrowser(synth, text, onAudioStart, onDone);
+      cancelPlaybackRef.current = speakBrowser(synth, text, onAudioStart, () => finishSpeaking());
       return;
     }
 
     const sentences = splitIntoSentences(text);
     devLog(`[speak-check] speak() called with ${sentences.length} sentence(s):`, sentences);
     if (sentences.length === 0) {
-      onDone();
+      finishSpeakingImmediately();
       return;
     }
 
@@ -281,12 +320,12 @@ export default function LiveConversation({ scenarioPrompt, categoryId, scenarioT
       const synth = typeof window !== "undefined" ? window.speechSynthesis : null;
       if (ttsMode === "edge" && synth) {
         devWarn("[speak-check] Edge TTS failed entirely for this turn; falling back to browser speechSynthesis.");
-        cancelPlaybackRef.current = speakBrowser(synth, text, onAudioStart, onDone);
+        cancelPlaybackRef.current = speakBrowser(synth, text, onAudioStart, () => finishSpeaking());
         return;
       }
       setErrorMessage("Der Kunde konnte nicht vorgelesen werden.");
     }
-    onDone();
+    finishSpeaking();
   }, [ttsMode]);
 
   const requestNextLine = useCallback(
@@ -455,6 +494,7 @@ export default function LiveConversation({ scenarioPrompt, categoryId, scenarioT
           stream={mic.stream}
           audioContext={mic.audioContext}
           onTranscriptReady={handleUserTranscript}
+          micGatedRef={micGatedRef}
         />
       )}
 

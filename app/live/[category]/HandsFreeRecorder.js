@@ -13,6 +13,7 @@ const TURN_SILENCE_MS = 1200; // sustained silence, tracked at the turn level, t
 const TURN_SAFETY_TIMEOUT_MS = 5000; // absolute fallback: force-end the turn after this much silence, independent of TURN_SILENCE_MS
 const MAX_RECORDING_MS = 60000; // failsafe cap on a single turn's length, measured from detected speech start
 const RETRY_DELAY_MS = 1500; // delay before automatically re-listening after a failed transcription
+const CALIBRATED_THRESHOLD_CEILING = 0.08; // sanity cap: a single loud event during calibration (e.g. residual AI TTS bleed through speakers) must never set an impossible threshold; clamped here and logged if it engages
 
 const STATUS = {
   INIT: "init",
@@ -60,7 +61,7 @@ function readRms(analyser, dataArray) {
 // dev-only double-invoke (mount -> cleanup -> mount again): startTurn() no longer has
 // any await before touching shared state, so there's no gap left for a second
 // invocation to race against.
-export default function HandsFreeRecorder({ stream, audioContext, onTranscriptReady }) {
+export default function HandsFreeRecorder({ stream, audioContext, onTranscriptReady, micGatedRef }) {
   const [status, setStatus] = useState(STATUS.INIT);
 
   // Per-turn: the audio graph nodes tied to the shared stream/context, torn down
@@ -125,11 +126,13 @@ export default function HandsFreeRecorder({ stream, audioContext, onTranscriptRe
   const debugRmsRef = useRef(null);
   const debugThresholdRef = useRef(null);
   const debugBarRef = useRef(null);
+  const debugGatedRef = useRef(null);
 
-  function updateDebugOverlay(rms, threshold) {
+  function updateDebugOverlay(rms, threshold, gated) {
     if (!vadDebugEnabledRef.current) return;
     if (debugRmsRef.current) debugRmsRef.current.textContent = rms.toFixed(4);
     if (debugThresholdRef.current) debugThresholdRef.current.textContent = threshold.toFixed(4);
+    if (debugGatedRef.current) debugGatedRef.current.textContent = gated ? "true" : "false";
     if (debugBarRef.current) {
       const pct = Math.max(0, Math.min(100, (rms / (threshold * 2)) * 100));
       debugBarRef.current.style.width = `${pct}%`;
@@ -145,6 +148,11 @@ export default function HandsFreeRecorder({ stream, audioContext, onTranscriptRe
   const lastSpeechAtRef = useRef(null);
   const completedSegmentCountRef = useRef(0);
   const segmentPromisesRef = useRef([]);
+  // Set the instant monitor() ever sees the VAD gate closed mid-turn (AI audio
+  // starting to play again — a race, since the app doesn't normally speak mid-turn).
+  // Checked once at turn-end: a contaminated turn is discarded rather than
+  // transcribed, regardless of what any individual segment captured.
+  const turnContaminatedRef = useRef(false);
 
   // Segment-level: reset every time a new segment starts.
   const currentRecorderRef = useRef(null);
@@ -195,6 +203,7 @@ export default function HandsFreeRecorder({ stream, audioContext, onTranscriptRe
     calibrationStartTimeRef.current = null;
     calibrationSumRef.current = 0;
     calibrationCountRef.current = 0;
+    turnContaminatedRef.current = false;
     setStatus(STATUS.INIT);
 
     if (!stream || !audioContext) {
@@ -228,7 +237,22 @@ export default function HandsFreeRecorder({ stream, audioContext, onTranscriptRe
 
     const rms = readRms(analyser, dataArray);
     updateBars(rms);
-    updateDebugOverlay(rms, effectiveThresholdRef.current);
+
+    if (micGatedRef?.current) {
+      // AI audio is playing (or still within its post-playback tail) — defer
+      // calibration entirely rather than sample the room while it isn't actually
+      // quiet. Reset any partial progress so a fresh CALIBRATION_MS window starts
+      // once the gate opens; this is what prevents the app from calibrating against
+      // its own TTS bleeding through the speakers into the mic.
+      calibrationStartTimeRef.current = null;
+      calibrationSumRef.current = 0;
+      calibrationCountRef.current = 0;
+      updateDebugOverlay(rms, effectiveThresholdRef.current, true);
+      rafRef.current = requestAnimationFrame(calibrate);
+      return;
+    }
+
+    updateDebugOverlay(rms, effectiveThresholdRef.current, false);
     const now = performance.now();
     if (calibrationStartTimeRef.current === null) {
       calibrationStartTimeRef.current = now;
@@ -247,8 +271,15 @@ export default function HandsFreeRecorder({ stream, audioContext, onTranscriptRe
   function finishCalibration() {
     const count = calibrationCountRef.current;
     const baseline = count > 0 ? calibrationSumRef.current / count : 0;
-    const threshold = Math.max(baseline * BASELINE_NOISE_MULTIPLIER, MIN_SPEECH_THRESHOLD);
+    const rawThreshold = Math.max(baseline * BASELINE_NOISE_MULTIPLIER, MIN_SPEECH_THRESHOLD);
+    const threshold = Math.min(rawThreshold, CALIBRATED_THRESHOLD_CEILING);
     effectiveThresholdRef.current = threshold;
+
+    if (rawThreshold > CALIBRATED_THRESHOLD_CEILING) {
+      console.warn(
+        `[HandsFreeRecorder] Calibrated threshold ${rawThreshold.toFixed(4)} RMS exceeded the sanity ceiling (${CALIBRATED_THRESHOLD_CEILING}) — clamping to ${threshold.toFixed(4)}. This usually means calibration picked up something other than room ambience (e.g. residual AI audio).`
+      );
+    }
 
     if (process.env.NODE_ENV !== "production") {
       console.log(
@@ -325,7 +356,21 @@ export default function HandsFreeRecorder({ stream, audioContext, onTranscriptRe
 
     const rms = readRms(analyser, dataArray);
     updateBars(rms);
-    updateDebugOverlay(rms, effectiveThresholdRef.current);
+
+    if (micGatedRef?.current) {
+      // AI audio started playing again mid-turn (a race — the app doesn't normally
+      // speak mid-turn, but this covers it defensively): freeze every timer (no
+      // silence/speech accumulation, no floor updates, no state transitions) and
+      // mark whatever's been captured this turn as contaminated so it's discarded
+      // at turn-end instead of transcribed.
+      turnContaminatedRef.current = true;
+      lastMonitorTimeRef.current = null; // avoid one huge frameDelta once the gate reopens
+      updateDebugOverlay(rms, effectiveThresholdRef.current, true);
+      rafRef.current = requestAnimationFrame(monitor);
+      return;
+    }
+
+    updateDebugOverlay(rms, effectiveThresholdRef.current, false);
     const now = performance.now();
     const frameDelta = lastMonitorTimeRef.current === null ? 0 : now - lastMonitorTimeRef.current;
     lastMonitorTimeRef.current = now;
@@ -415,6 +460,19 @@ export default function HandsFreeRecorder({ stream, audioContext, onTranscriptRe
     if (!activeRef.current) return;
 
     const pending = segmentPromisesRef.current;
+
+    if (turnContaminatedRef.current) {
+      console.warn(
+        "[HandsFreeRecorder] Turn overlapped AI audio playback (VAD gate) — discarding instead of transcribing."
+      );
+      // Any segment transcription requests already in flight are ignored, not
+      // awaited — attach a no-op catch so a failed one doesn't surface as an
+      // unhandled promise rejection.
+      pending.forEach((p) => p.catch(() => {}));
+      startTurn();
+      return;
+    }
+
     if (pending.length === 0) {
       // No segment in this turn ever contained real speech — background noise
       // or a brief blip. Discard and quietly resume listening.
@@ -502,6 +560,7 @@ export default function HandsFreeRecorder({ stream, audioContext, onTranscriptRe
           </div>
           <div>rms: <span ref={debugRmsRef}>0.0000</span></div>
           <div>threshold: <span ref={debugThresholdRef}>0.0000</span></div>
+          <div>gated: <span ref={debugGatedRef}>false</span></div>
           <div>state: {status}</div>
         </div>
       )}
