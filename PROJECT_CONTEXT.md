@@ -49,10 +49,12 @@ work with zero extra config.
   provider, JWT session strategy, password hashing via `@node-rs/bcrypt`. No OAuth
   providers, no email verification, no password reset flow.
 - **External services**: Groq API (LLM + Whisper transcription), Turso (database), and
-  text-to-speech in one of two modes depending on deployment target — a local/Render Piper
-  TTS process, or the browser's own `window.speechSynthesis` on Vercel (see "Deployment"
-  below). No other third-party services. No Anthropic/Claude calls currently happen at
-  runtime despite `ANTHROPIC_API_KEY` existing as an env var slot (see "Known limitations").
+  text-to-speech in one of three modes depending on deployment target — a local/Render Piper
+  TTS process, Microsoft Edge's online neural voices via `msedge-tts` on Vercel (no API key),
+  or the browser's own `window.speechSynthesis` as a forced option or runtime fallback (see
+  "Deployment" below). No other third-party services. No Anthropic/Claude calls currently
+  happen at runtime despite `ANTHROPIC_API_KEY` existing as an env var slot (see "Known
+  limitations").
 
 ## Routes
 
@@ -80,7 +82,7 @@ work with zero extra config.
 | `/api/feedback` (POST) | Groq `llama-3.3-70b-versatile` | Grades a single transcript against a scenario prompt. Returns `{ feedback: { assessment, grammarMistakes[], naturalPhrasing[], contentIdeas[], modelAnswer } }` (no `score` field — see naming inconsistency note below). Same `getGroqApiKey()` guard as above. |
 | `/api/conversation` (POST) | Groq `llama-3.3-70b-versatile` | Drives the AI customer's next line in a live roleplay. Returns `{ line }`. Same guard. |
 | `/api/conversation-feedback` (POST) | Groq `llama-3.3-70b-versatile` | Grades a full conversation transcript at once. Returns `{ feedback: { score, scoreJustification, assessment, grammarMistakes[], naturalPhrasing[], contentIdeas[], modelAnswer } }`, clamping `score` to an integer 1–10 or dropping it. Same guard. |
-| `/api/speak` (POST) | Local Piper process (`piperClient.js`) | Accepts `{ text }`, returns `audio/wav`. `maxDuration = 30`. Only reachable when `getTtsMode()` resolves to `"piper"` — returns `501` otherwise (Vercel/browser mode never calls this route at all; the client speaks directly via `window.speechSynthesis`). |
+| `/api/speak` (POST) | Local Piper process (`piperClient.js`) or Microsoft Edge TTS (`edgeTtsClient.js`) | Accepts `{ text }`, returns `audio/wav` (piper) or `audio/mpeg` (edge). `maxDuration = 30`. Branches on `getTtsMode()`: `"piper"` or `"edge"` synthesize server-side; anything else (`"browser"`) returns `501` — that mode never calls this route at all, the client speaks directly via `window.speechSynthesis`. |
 | `/api/auth/[...nextauth]` (GET/POST) | — | Re-exports `handlers` from `auth.js` — this is the whole Auth.js wiring for the route handler. |
 | `/api/register` (POST) | — | Validates email format + password length (≥8 chars), checks for an existing account, hashes the password (`@node-rs/bcrypt`), inserts the user. No CSRF token needed beyond what Auth.js itself provides for the sign-in call that follows client-side. |
 | `/api/progress/practice-session` (POST) | — | Requires a session (`auth()`); saves `{ category, questions: [{ scenarioId, title, prompt, transcript, feedback }] }` for the logged-in user. Called once by `SessionRunner` when a 10-question session completes, only if `useSession()` shows a user. |
@@ -109,8 +111,10 @@ scores, only the full assessment text; saved conversation results always show a 
 - **`lib/env.js`** — `getGroqApiKey()` (throws if unset), `getTursoCredentials()` (picks
   `TURSO_DEV_*`/`TURSO_PROD_*` by `NODE_ENV`, throws if either half missing),
   `checkPiperInstall()` (returns a warning string, not a throw, if the resolved Piper
-  binary/model isn't found on disk), `getTtsMode()` (resolves `"piper"`/`"browser"` — see
-  "Deployment" below), and `checkRequiredEnvVars()` (used by `instrumentation.js`).
+  binary/model isn't found on disk), `getTtsMode()` (resolves `"piper"`/`"edge"`/`"browser"`
+  — see "Deployment" below), `getEdgeTtsVoice()` (env-configurable Edge TTS voice name, default
+  `de-DE-FlorianMultilingualNeural`), and `checkRequiredEnvVars()` (used by
+  `instrumentation.js`).
 - **`instrumentation.js`** (project root) — `register()` runs once at server startup (skips
   the edge runtime), prints a loud console warning naming any missing required env var
   (`GROQ_API_KEY`, `AUTH_SECRET`, the active `TURSO_*` pair), logs the resolved TTS mode,
@@ -157,16 +161,22 @@ scores, only the full assessment text; saved conversation results always show a 
   line is a real error, left as a plain `console.error` so it's never silenced); phase-change
   text has a `.fade-in` class and a `.speaking-indicator` (three bouncing dots) shows
   next to "Der Kunde antwortet"/"Der Kunde spricht". The `speak()` callback branches on
-  `ttsMode`: `"piper"` keeps the original sentence-split + one-sentence-lookahead
-  fetch-ahead-of-playback pipeline against `/api/speak` (`synthesizeSentence` +
-  `new Audio(blobUrl)`); `"browser"` uses a new `speakBrowser()` helper that speaks the same
-  split sentences sequentially via `window.speechSynthesis`/`SpeechSynthesisUtterance` (no
-  fetch, no prefetch pipeline needed — synthesis is instant) with a bounded
-  (≤300ms, empirically near-instant in Chrome) wait for `getVoices()`/`voiceschanged` to
-  pick a German (`lang` starting `"de"`) voice if the list hasn't loaded yet. Both paths
-  share the same `onAudioStart`/`onDone` callback contract and the same
-  `cancelPlaybackRef`-based cancellation used by `stopSpeaking()`, so `requestNextLine()` and
-  `HandsFreeRecorder` need no knowledge of which backend is active.
+  `ttsMode`: `"piper"` and `"edge"` share the identical sentence-split +
+  one-sentence-lookahead fetch-ahead-of-playback pipeline against `/api/speak`
+  (`synthesizeSentence` + `new Audio(blobUrl)`) — the client can't tell them apart, since
+  both are server-side synthesis behind the same route contract; `"browser"` uses a
+  `speakBrowser()` helper that speaks the same split sentences sequentially via
+  `window.speechSynthesis`/`SpeechSynthesisUtterance` (no fetch, no prefetch pipeline needed
+  — synthesis is instant) with a bounded (≤300ms, empirically near-instant in Chrome) wait
+  for `getVoices()`/`voiceschanged` to pick a German (`lang` starting `"de"`) voice if the
+  list hasn't loaded yet. If `ttsMode === "edge"` and every sentence's `/api/speak` request
+  fails for a turn (`playedAny` stays `false`), `speak()` falls back to `speakBrowser()` for
+  the whole reply rather than just showing an error — a per-turn, whole-reply fallback, not
+  a per-sentence one (a single failed sentence mid-reply, with others succeeding, just skips
+  that sentence's audio, same as before). All paths share the same `onAudioStart`/`onDone`
+  callback contract and the same `cancelPlaybackRef`-based cancellation used by
+  `stopSpeaking()`, so `requestNextLine()` and `HandsFreeRecorder` need no knowledge of which
+  backend is active.
 - **`app/live/[category]/HandsFreeRecorder.js`** (Client) — Voice Activity Detection (VAD),
   structurally unchanged from before Phase 3. Now also renders a live 5-bar mic-level meter
   (`.mic-bars`/`.mic-bar` in globals.css) during calibrating/listening/recording, updated by
@@ -181,14 +191,24 @@ scores, only the full assessment text; saved conversation results always show a 
   default, `PIPER_DIR` overridable on both) — everything else in the file (the FIFO
   stdin/stdout queue, crash/respawn handling) is OS-agnostic and unchanged by platform.
   `app/api/speak/route.js` only imports this module lazily, after confirming
-  `getTtsMode() === "piper"`, so it's never touched at all when running in browser-TTS mode.
+  `getTtsMode() === "piper"`, so it's never touched at all when running in edge/browser-TTS
+  mode.
+- **`app/api/speak/edgeTtsClient.js`** — `synthesize(text)` using the `msedge-tts` npm
+  package (Microsoft Edge's online neural voices, no API key). Opens a fresh outbound
+  WebSocket per call, streams the response into a `Buffer`, closes the connection — no
+  `globalThis` caching, unlike `piperClient.js`, since there's no persistent process to keep
+  alive and no cross-request state worth (or safe to) sharing on a serverless platform where
+  consecutive requests may land on different instances anyway. Voice comes from
+  `getEdgeTtsVoice()` (default `de-DE-FlorianMultilingualNeural`, a Microsoft
+  conversation-optimized voice; override via `EDGE_TTS_VOICE`). Output is MP3
+  (`audio-24khz-48kbitrate-mono-mp3`).
 - **`scripts/setup-piper.js`** — `postinstall` hook (runs after every `npm install`,
   including Render's default build). No-ops on Windows. On Linux, no-ops if `getTtsMode()`
-  resolves to `"browser"` (e.g. on Vercel, where the download would never be used), or if
-  Piper is already installed and looks intact (binary + model present, model ≥100MB).
-  Otherwise downloads `rhasspy/piper`'s `2023.11.14-2` Linux release tarball and the German
-  Thorsten "high" voice model from Hugging Face into `vendor/piper/` (gitignored), sets the
-  binary's executable bit, and fails the build loudly on any error.
+  resolves to anything other than `"piper"` (e.g. `"edge"` on Vercel, where the download
+  would never be used), or if Piper is already installed and looks intact (binary + model
+  present, model ≥100MB). Otherwise downloads `rhasspy/piper`'s `2023.11.14-2` Linux release
+  tarball and the German Thorsten "high" voice model from Hugging Face into `vendor/piper/`
+  (gitignored), sets the binary's executable bit, and fails the build loudly on any error.
 
 ## Content inventory
 
@@ -233,24 +253,32 @@ Turso backend but a different logical database:
 |---|---|---|---|---|
 | Local dev (Windows) | `development` | unset | `piper` (`C:\piper`) | `TURSO_DEV_*` |
 | Render | `production` | unset | `piper` (`vendor/piper`, auto-downloaded) | `TURSO_PROD_*` |
-| Vercel | `production` | set | `browser` (`window.speechSynthesis`) | `TURSO_PROD_*` |
+| Vercel | `production` | set | `edge` (Microsoft Edge TTS via `msedge-tts`) | `TURSO_PROD_*` |
 
-`TTS_MODE` in `.env.local`/the platform's env settings overrides the auto-detection in
-either direction on any target. There is no `vercel.json` in this repo and none is needed —
+`TTS_MODE` in `.env.local`/the platform's env settings overrides the auto-detection to any
+of `piper`/`edge`/`browser` on any target. `browser` is otherwise only reached as a runtime
+fallback: if every `/api/speak` request fails for a given `edge`-mode turn,
+`LiveConversation.js` falls back to `window.speechSynthesis` for that turn so a conversation
+never just stalls silently. There is no `vercel.json` in this repo and none is needed —
 Next.js is zero-config on Vercel, and the only thing that would ever warrant one (a build
 command override, function memory/duration tuning) isn't needed here: `maxDuration` is
 already set per-route via Next's own route-segment config (`/api/speak`, `/api/transcribe`),
-and Vercel picks that up natively.
+and Vercel picks that up natively. `edge` mode needs Vercel's default Node.js Serverless
+Function runtime specifically, not Edge Runtime — Edge Runtime blocks the TCP/WebSocket
+connections `msedge-tts` needs; `/api/speak/route.js` has no `export const runtime = "edge"`,
+so it already uses the correct runtime by default.
 
-**Why three different TTS-mode/DB combinations instead of one config**: Piper needs a
-**persistent process** kept alive across requests — true on a normal server (local dev,
-Render) but not on Vercel's serverless functions, where each request may hit a different,
-short-lived instance with no shared process state. SQLite (the original DB) had the same
-problem in reverse (needs a persistent *file*), which is why the DB moved to Turso first —
-a network database has no persistent-process/file requirement either way, so it didn't need
-a second mode; TTS did, because there's no equivalent "just make Piper a network service"
-move without hosting Piper somewhere separately (not done — browser TTS was simpler and
-free).
+**Why `piper`/`edge` instead of one TTS config**: Piper needs a **persistent process** kept
+alive across requests — true on a normal server (local dev, Render) but not on Vercel's
+serverless functions, where each request may hit a different, short-lived instance with no
+shared process state. `edge` mode has no such requirement (each call opens and closes its
+own short-lived WebSocket within a single request), so it's the natural fit for serverless
+— chosen over `browser` mode as Vercel's *default* specifically for voice quality (Microsoft
+neural voices vs. whatever's installed on the visitor's OS/browser), with `browser` kept as
+the safety-net fallback rather than removed. SQLite (the original DB) had a similar problem
+in reverse (needs a persistent *file*), which is why the DB moved to Turso — a network
+database has no persistent-process/file requirement either way, so it didn't need a second
+mode the way TTS did.
 
 ## Known limitations / honest state of each feature
 
@@ -268,8 +296,10 @@ before Phase 3:
   but doesn't change the underlying thresholds.
 - In `"piper"` mode, Piper is a single local process shared across all concurrent users of
   the dev/prod server (no per-request or per-user isolation); the `MAX_PENDING` queue cap
-  (10) is a backstop, not real concurrency. In `"browser"` mode (Vercel) this doesn't apply
-  — synthesis happens independently in each visitor's own browser.
+  (10) is a backstop, not real concurrency. `"edge"` mode (Vercel) has no such bottleneck —
+  each request opens its own independent WebSocket to Microsoft's service. `"browser"` mode
+  has no server-side synthesis at all — it happens independently in each visitor's own
+  browser.
 - `[leak-check]`/`[speak-check]` console instrumentation is now silenced in production
   builds (Phase 4) but still fires in dev, same as before.
 
@@ -320,13 +350,15 @@ Phase 1. Specific limitations:
   (called from `instrumentation.js`, only when `getTtsMode() === "piper"`) validates the
   resolved Piper binary/model exist on disk, so a missing/misconfigured Piper install
   surfaces as a startup warning, not just a runtime error the first time `/api/speak` is
-  called. There is no equivalent check for browser mode — `window.speechSynthesis` support
-  can't be checked server-side, and `speakBrowser()` already degrades gracefully (a clear
-  error message + moving the conversation on) if a visitor's browser lacks it or has zero
-  voices.
+  called. `"edge"` mode needs no startup check — `msedge-tts` needs no API key/credentials,
+  just network access, and a misconfigured `EDGE_TTS_VOICE` surfaces as a normal request
+  failure that already triggers the `"browser"` runtime fallback. There is no check for
+  `"browser"` mode itself — `window.speechSynthesis` support can't be checked server-side,
+  and `speakBrowser()` already degrades gracefully (a clear error message + moving the
+  conversation on) if a visitor's browser lacks it or has zero voices.
 - **`lang="de"` is now correct** on `<html>` in `app/layout.js` (was `"en"`, fixed in Phase 3).
 - **Deployment configuration exists now** (see "Deployment" above) — Render (Piper, Linux
-  binary auto-downloaded at build time) and Vercel (browser TTS, zero-config Next.js
+  binary auto-downloaded at build time) and Vercel (Edge TTS, zero-config Next.js
   detection, no `vercel.json`) are both real, working targets, not aspirational. `next.config.mjs`
   is still the default empty config — nothing in it needed to change for either target.
 

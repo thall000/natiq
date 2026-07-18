@@ -59,11 +59,12 @@ function pickGermanVoice(synth) {
   });
 }
 
-// Used when ttsMode is "browser" (e.g. Vercel serverless, where Piper's persistent child
-// process can't run): window.speechSynthesis has no network/synthesis delay, so sentences
-// are simply spoken one after another — no need for Piper's fetch-ahead-of-playback
-// pipeline. Mirrors speak()'s onAudioStart/onDone contract so requestNextLine doesn't need
-// to know which backend is active.
+// Used when ttsMode is "browser" — either forced explicitly, or as a runtime fallback when
+// "edge" (Vercel's default TTS backend) fails entirely for a turn. window.speechSynthesis
+// has no network/synthesis delay, so sentences are simply spoken one after another — no
+// need for the fetch-ahead-of-playback pipeline the server-side modes use. Mirrors speak()'s
+// onAudioStart/onDone contract so requestNextLine doesn't need to know which backend is
+// active.
 function speakBrowser(synth, text, onAudioStart, onDone) {
   const sentences = splitIntoSentences(text);
   if (sentences.length === 0) {
@@ -179,9 +180,13 @@ export default function LiveConversation({ scenarioPrompt, categoryId, scenarioT
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stopSpeaking]);
 
-  // Streams the response sentence-by-sentence: sentence 1 plays as soon as its
-  // audio is ready, while sentence 2 is already synthesizing in the background,
-  // and so on. onDone only fires once the final sentence's audio has finished.
+  // "piper" and "edge" both go through /api/speak and share this fetch-ahead pipeline
+  // (sentence 1 plays as soon as its audio is ready, while sentence 2 is already
+  // synthesizing in the background, and so on — identical from here on regardless of which
+  // server-side backend produced the audio). "browser" bypasses this pipeline entirely (see
+  // speakBrowser() below). onDone only fires once the final sentence's audio has finished,
+  // or — if every sentence's synthesis failed while ttsMode is "edge" — after falling back
+  // to speakBrowser() for the whole reply.
   const speak = useCallback(async (text, onAudioStart, onDone) => {
     if (ttsMode === "browser") {
       const synth = typeof window !== "undefined" ? window.speechSynthesis : null;
@@ -273,6 +278,12 @@ export default function LiveConversation({ scenarioPrompt, categoryId, scenarioT
     }
 
     if (!playedAny) {
+      const synth = typeof window !== "undefined" ? window.speechSynthesis : null;
+      if (ttsMode === "edge" && synth) {
+        devWarn("[speak-check] Edge TTS failed entirely for this turn; falling back to browser speechSynthesis.");
+        cancelPlaybackRef.current = speakBrowser(synth, text, onAudioStart, onDone);
+        return;
+      }
       setErrorMessage("Der Kunde konnte nicht vorgelesen werden.");
     }
     onDone();
