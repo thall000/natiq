@@ -6,7 +6,12 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "setup:piper": "node scripts/setup-piper.js",
+    "postinstall": "node scripts/setup-piper.js"
+  },
+  "engines": {
+    "node": ">=18"
   },
   "dependencies": {
     "@libsql/client": "^0.17.4",

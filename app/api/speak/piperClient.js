@@ -5,8 +5,12 @@ import os from "node:os";
 import path from "node:path";
 
 // Local Piper TTS install — update PIPER_DIR (or set the env var) if it moves.
-const PIPER_DIR = process.env.PIPER_DIR || "C:\\piper";
-const PIPER_EXE = path.join(PIPER_DIR, "piper.exe");
+// Windows (local dev) defaults to C:\piper, installed manually per README.md. Linux
+// (Render) defaults to vendor/piper, populated at build time by scripts/setup-piper.js.
+const IS_WINDOWS = process.platform === "win32";
+const PIPER_DIR =
+  process.env.PIPER_DIR || (IS_WINDOWS ? "C:\\piper" : path.join(process.cwd(), "vendor", "piper"));
+const PIPER_EXE = path.join(PIPER_DIR, IS_WINDOWS ? "piper.exe" : "piper");
 const PIPER_MODEL = path.join(PIPER_DIR, "de_DE-thorsten-high.onnx");
 const PIPER_OUTPUT_DIR = path.join(os.tmpdir(), "piper-output");
 

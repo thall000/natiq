@@ -44,12 +44,14 @@ content — not just "correct" or "incorrect."
   - `llama-3.3-70b-versatile` for the AI customer persona (live conversations) and for
     generating feedback (both single-answer and full-conversation).
 - **Piper TTS** (local, offline) — synthesizes the AI customer's spoken replies in the live
-  conversation feature, using the German `de_DE-thorsten-high` voice. Runs as a local
-  child process, not a cloud API.
+  conversation feature, using the German `de_DE-thorsten-high` voice. Runs as a persistent
+  local child process, not a cloud API — `piper.exe` on Windows (local dev), the Linux
+  `piper` binary on Render, fetched automatically at build time (see below).
 - **Auth.js (next-auth) v5** with a Credentials provider — self-hosted email/password auth,
   no external auth service. Passwords are hashed with `@node-rs/bcrypt`.
-- **SQLite** (via `better-sqlite3`, raw SQL, no ORM) for user accounts and saved progress —
-  a single local file at `data/natiq.db`, gitignored.
+- **Turso** (libSQL, raw SQL via `@libsql/client`, no ORM) for user accounts and saved
+  progress — a separate dev/prod database selected by `NODE_ENV`, since Render's free tier
+  doesn't persist local files.
 - Plain JavaScript (no TypeScript), CSS via `globals.css` with CSS variables for theming
   (light/dark mode) and a small set of shared motion utilities (fade-in transitions, an
   animated score ring, a live mic-level meter).
@@ -84,20 +86,29 @@ Create `.env.local` in the project root:
 ```
 GROQ_API_KEY=your_groq_api_key_here
 AUTH_SECRET=generate_a_random_string_here
+TURSO_DEV_DATABASE_URL=your_turso_dev_database_url_here
+TURSO_DEV_AUTH_TOKEN=your_turso_dev_auth_token_here
+TURSO_PROD_DATABASE_URL=your_turso_prod_database_url_here
+TURSO_PROD_AUTH_TOKEN=your_turso_prod_auth_token_here
 ```
 
 Generate `AUTH_SECRET` with, e.g., `openssl rand -base64 32` (or any random 32+ character
-string) — it's used to sign session tokens. The dev server will print a clear startup
-warning naming any missing required variable, and API routes that need `GROQ_API_KEY` fail
-with a message telling you exactly that, rather than a cryptic upstream error.
+string) — it's used to sign session tokens. Create the two Turso databases (dev and prod)
+at [turso.tech](https://turso.tech) — `TURSO_DEV_*` is used locally and in any non-production
+deploy, `TURSO_PROD_*` only when `NODE_ENV=production` (see `lib/env.js`). The dev server
+will print a clear startup warning naming any missing required variable, and API routes that
+need `GROQ_API_KEY` fail with a message telling you exactly that, rather than a cryptic
+upstream error.
 
 (`ANTHROPIC_API_KEY` is not currently used by any route — feedback and conversation
 generation both run on Groq's Llama 3.3 for now. See `PROJECT_CONTEXT.md` for why.)
 
 ### 3. Set up Piper TTS (required for `/live`)
 
-This project shells out to a local `piper.exe` rather than calling a cloud TTS API. By
-default it expects everything at `C:\piper`:
+This project shells out to a local Piper binary rather than calling a cloud TTS API. Setup
+differs by platform — Windows (local dev) is manual, Linux (Render) is automatic.
+
+**Windows (local dev)** — by default it expects everything at `C:\piper`:
 
 ```
 C:\piper\piper.exe
@@ -117,8 +128,18 @@ To set this up:
 3. If you install Piper somewhere other than `C:\piper`, set `PIPER_DIR` in `.env.local` to
    point at that folder instead — see `app/api/speak/piperClient.js`.
 
-The dev server spawns `piper.exe` as a persistent child process on first request to
-`/api/speak` and keeps it alive across requests (see `PROJECT_CONTEXT.md` for details).
+**Linux (Render, or any Linux host) — automatic.** `scripts/setup-piper.js` runs as a
+`postinstall` hook after `npm install`, so it fires automatically as part of Render's build
+(no dashboard configuration needed). It downloads the Linux Piper binary
+(`rhasspy/piper`'s `2023.11.14-2` release — the same CLI as the Windows build above, just
+Linux-native) and the same Thorsten "high" voice model from Hugging Face, installing both to
+`vendor/piper/` (gitignored). It's idempotent — safe to re-run, and it no-ops immediately on
+Windows so it never interferes with the manual setup above. Override the install location
+with `PIPER_DIR` on Linux too, same as Windows.
+
+The dev/prod server spawns the Piper binary as a persistent child process on first request
+to `/api/speak` and keeps it alive across requests (see `PROJECT_CONTEXT.md` for details) —
+this architecture is identical on both platforms; only the binary path/extension differ.
 
 ### 4. Run the dev server
 
@@ -126,8 +147,8 @@ The dev server spawns `piper.exe` as a persistent child process on first request
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). The SQLite database file is created
-automatically on first use at `data/natiq.db` — no setup step needed, and it's gitignored.
+Open [http://localhost:3000](http://localhost:3000). Accounts and saved progress are stored
+in Turso — see `.env.local` requirements above; no local database file is needed.
 
 ## Project docs
 

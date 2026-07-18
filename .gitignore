@@ -36,6 +36,9 @@ yarn-error.log*
 # vercel
 .vercel
 
+# Piper TTS binary + voice model, downloaded at build/install time (scripts/setup-piper.js)
+/vendor/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
