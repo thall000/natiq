@@ -14,6 +14,15 @@ const { Readable } = require("node:stream");
 
 const IS_WINDOWS = process.platform === "win32";
 
+// Mirrors getTtsMode() in lib/env.js — kept separate since this script runs outside
+// Next.js's module system (plain Node, invoked via postinstall).
+const TTS_MODE =
+  process.env.TTS_MODE === "piper" || process.env.TTS_MODE === "browser"
+    ? process.env.TTS_MODE
+    : process.env.VERCEL
+      ? "browser"
+      : "piper";
+
 const PIPER_DIR =
   process.env.PIPER_DIR || (IS_WINDOWS ? "C:\\piper" : path.join(process.cwd(), "vendor", "piper"));
 
@@ -48,6 +57,13 @@ function mb(bytes) {
 async function main() {
   if (IS_WINDOWS) {
     console.log("[setup-piper] Windows detected — skipping Piper download; using local install.");
+    return;
+  }
+
+  if (TTS_MODE !== "piper") {
+    console.log(
+      `[setup-piper] TTS mode is "${TTS_MODE}" — skipping Piper download (it would never be used).`
+    );
     return;
   }
 

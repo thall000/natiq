@@ -43,10 +43,14 @@ content — not just "correct" or "incorrect."
   - `whisper-large-v3` for speech-to-text transcription (German, domain-biased prompt).
   - `llama-3.3-70b-versatile` for the AI customer persona (live conversations) and for
     generating feedback (both single-answer and full-conversation).
-- **Piper TTS** (local, offline) — synthesizes the AI customer's spoken replies in the live
-  conversation feature, using the German `de_DE-thorsten-high` voice. Runs as a persistent
-  local child process, not a cloud API — `piper.exe` on Windows (local dev), the Linux
-  `piper` binary on Render, fetched automatically at build time (see below).
+- **Text-to-speech, in one of two modes** (`TTS_MODE`, see below) — synthesizes the AI
+  customer's spoken replies in the live conversation feature:
+  - **`piper`** (local Windows dev, Render) — **Piper TTS**, offline, using the German
+    `de_DE-thorsten-high` voice. Runs as a persistent local child process, not a cloud API —
+    `piper.exe` on Windows, the Linux `piper` binary on Render, fetched automatically at
+    build time (see below).
+  - **`browser`** (Vercel, or anywhere a persistent process isn't available) — the browser's
+    built-in `window.speechSynthesis`, entirely client-side, no server TTS process at all.
 - **Auth.js (next-auth) v5** with a Credentials provider — self-hosted email/password auth,
   no external auth service. Passwords are hashed with `@node-rs/bcrypt`.
 - **Turso** (libSQL, raw SQL via `@libsql/client`, no ORM) for user accounts and saved
@@ -71,9 +75,11 @@ content — not just "correct" or "incorrect."
 - A [Groq API key](https://console.groq.com/keys) (used for transcription, the AI customer
   persona, and feedback generation — Groq's free tier is what this project currently runs
   on).
-- **Piper TTS**, set up separately (see below) — required only for the **live conversation**
-  feature. Static interview practice, the vocabulary reference, and accounts/saved progress
-  all work without it.
+- **Piper TTS**, set up separately (see below) — only needed if `TTS_MODE` resolves to
+  `"piper"` (the default on Windows/Render). On Vercel, or with `TTS_MODE=browser`, the live
+  conversation feature uses the browser's built-in speech synthesis instead and needs no
+  server-side TTS setup at all. Static interview practice, the vocabulary reference, and
+  accounts/saved progress never need Piper either way.
 
 ### 2. Install and configure
 
@@ -90,6 +96,9 @@ TURSO_DEV_DATABASE_URL=your_turso_dev_database_url_here
 TURSO_DEV_AUTH_TOKEN=your_turso_dev_auth_token_here
 TURSO_PROD_DATABASE_URL=your_turso_prod_database_url_here
 TURSO_PROD_AUTH_TOKEN=your_turso_prod_auth_token_here
+
+# Optional — forces the TTS backend for /live instead of auto-detecting by platform.
+# TTS_MODE=piper
 ```
 
 Generate `AUTH_SECRET` with, e.g., `openssl rand -base64 32` (or any random 32+ character
@@ -103,10 +112,33 @@ upstream error.
 (`ANTHROPIC_API_KEY` is not currently used by any route — feedback and conversation
 generation both run on Groq's Llama 3.3 for now. See `PROJECT_CONTEXT.md` for why.)
 
-### 3. Set up Piper TTS (required for `/live`)
+### 3. TTS mode and Piper setup (only relevant for `/live`)
 
-This project shells out to a local Piper binary rather than calling a cloud TTS API. Setup
-differs by platform — Windows (local dev) is manual, Linux (Render) is automatic.
+The live conversation feature needs some way to turn the AI customer's reply text into
+speech. `getTtsMode()` in `lib/env.js` decides which:
+
+- If `TTS_MODE` is set explicitly to `piper` or `browser` in `.env.local`, that wins.
+- Otherwise, it auto-detects: `browser` if `process.env.VERCEL` is set (Vercel sets this
+  automatically in both build and runtime), `piper` otherwise.
+
+This distinction exists because Piper runs as a **persistent child process kept alive
+across requests** — that works fine locally and on Render (a persistent server), but not on
+Vercel's serverless functions, where each request may hit a different, short-lived instance
+with no shared process state and (on the free tier) no way to spawn/keep alive a large
+native binary anyway. `NODE_ENV` alone can't distinguish these, since Render also runs with
+`NODE_ENV=production` — hence the separate `VERCEL` check.
+
+**Deploying to Vercel needs no Piper setup at all.** The live conversation's client-side
+code speaks each sentence with `window.speechSynthesis` directly in the browser (German
+voice, picked automatically from whatever the visitor's browser/OS provides) — no server
+TTS process, no binary or model download, `/api/speak` is never called. Audio quality
+depends on the visitor's own browser/OS voices rather than the curated Thorsten voice, and
+there's no synthesis delay to hide, so sentences are simply spoken back-to-back instead of
+Piper's fetch-ahead-of-playback pipeline.
+
+**Local dev and Render** default to `piper`, using a local/downloaded Piper binary as
+described below. Setup differs by platform — Windows (local dev) is manual, Linux (Render)
+is automatic.
 
 **Windows (local dev)** — by default it expects everything at `C:\piper`:
 

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { categories, getCategoryById, getRandomRoleplayByCategory } from "../../scenarios";
+import { getTtsMode } from "../../../lib/env";
 import LiveConversation from "./LiveConversation";
 
 export const dynamic = "force-dynamic";
@@ -46,6 +47,7 @@ export default async function LiveRoomPage({ params }) {
         scenarioPrompt={scenario.prompt}
         categoryId={categoryId}
         scenarioTitle={scenario.title}
+        ttsMode={getTtsMode()}
       />
     </main>
   );

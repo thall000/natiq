@@ -40,7 +40,73 @@ async function synthesizeSentence(text) {
   return URL.createObjectURL(audioBlob);
 }
 
-export default function LiveConversation({ scenarioPrompt, categoryId, scenarioTitle }) {
+// Voice list loads asynchronously in some browsers (Chrome fires "voiceschanged" after an
+// initial empty getVoices() call) — wait for it once, bounded, rather than risk silently
+// missing an available German voice on the very first utterance of a session.
+function pickGermanVoice(synth) {
+  return new Promise((resolve) => {
+    const fromList = (voices) => voices.find((v) => v.lang?.toLowerCase().startsWith("de")) || null;
+    const existing = synth.getVoices();
+    if (existing.length > 0) {
+      resolve(fromList(existing));
+      return;
+    }
+    const timer = setTimeout(() => resolve(fromList(synth.getVoices())), 300);
+    synth.onvoiceschanged = () => {
+      clearTimeout(timer);
+      resolve(fromList(synth.getVoices()));
+    };
+  });
+}
+
+// Used when ttsMode is "browser" (e.g. Vercel serverless, where Piper's persistent child
+// process can't run): window.speechSynthesis has no network/synthesis delay, so sentences
+// are simply spoken one after another — no need for Piper's fetch-ahead-of-playback
+// pipeline. Mirrors speak()'s onAudioStart/onDone contract so requestNextLine doesn't need
+// to know which backend is active.
+function speakBrowser(synth, text, onAudioStart, onDone) {
+  const sentences = splitIntoSentences(text);
+  if (sentences.length === 0) {
+    onDone();
+    return () => {};
+  }
+
+  let cancelled = false;
+
+  (async () => {
+    const voice = await pickGermanVoice(synth);
+    if (cancelled) return;
+
+    let audioStartFired = false;
+    const speakNext = (i) => {
+      if (cancelled) return;
+      if (i >= sentences.length) {
+        onDone();
+        return;
+      }
+      const utterance = new SpeechSynthesisUtterance(sentences[i]);
+      utterance.lang = "de-DE";
+      if (voice) utterance.voice = voice;
+      utterance.onstart = () => {
+        if (!audioStartFired) {
+          audioStartFired = true;
+          onAudioStart();
+        }
+      };
+      utterance.onend = () => speakNext(i + 1);
+      utterance.onerror = () => speakNext(i + 1);
+      synth.speak(utterance);
+    };
+    speakNext(0);
+  })();
+
+  return () => {
+    cancelled = true;
+    synth.cancel();
+  };
+}
+
+export default function LiveConversation({ scenarioPrompt, categoryId, scenarioTitle, ttsMode }) {
   const { data: authSession } = useSession();
   const [phase, setPhase] = useState(PHASE.INTRO);
   const [messages, setMessages] = useState([]);
@@ -117,6 +183,18 @@ export default function LiveConversation({ scenarioPrompt, categoryId, scenarioT
   // audio is ready, while sentence 2 is already synthesizing in the background,
   // and so on. onDone only fires once the final sentence's audio has finished.
   const speak = useCallback(async (text, onAudioStart, onDone) => {
+    if (ttsMode === "browser") {
+      const synth = typeof window !== "undefined" ? window.speechSynthesis : null;
+      if (!synth) {
+        setErrorMessage("Der Kunde konnte nicht vorgelesen werden.");
+        onDone();
+        return;
+      }
+      devLog("[speak-check] speak() using browser speechSynthesis");
+      cancelPlaybackRef.current = speakBrowser(synth, text, onAudioStart, onDone);
+      return;
+    }
+
     const sentences = splitIntoSentences(text);
     devLog(`[speak-check] speak() called with ${sentences.length} sentence(s):`, sentences);
     if (sentences.length === 0) {
@@ -198,7 +276,7 @@ export default function LiveConversation({ scenarioPrompt, categoryId, scenarioT
       setErrorMessage("Der Kunde konnte nicht vorgelesen werden.");
     }
     onDone();
-  }, []);
+  }, [ttsMode]);
 
   const requestNextLine = useCallback(
     async (history) => {

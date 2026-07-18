@@ -1,7 +1,7 @@
 export async function register() {
   if (process.env.NEXT_RUNTIME === "edge") return;
 
-  const { checkRequiredEnvVars, checkPiperInstall } = await import("./lib/env");
+  const { checkRequiredEnvVars, checkPiperInstall, getTtsMode } = await import("./lib/env");
   const missing = checkRequiredEnvVars();
 
   if (missing.length > 0) {
@@ -20,6 +20,11 @@ export async function register() {
     );
   }
 
-  const piperWarning = checkPiperInstall();
-  if (piperWarning) console.error(`\n[Natiq] ${piperWarning}\n`);
+  const ttsMode = getTtsMode();
+  console.log(`[Natiq] TTS mode: ${ttsMode}`);
+
+  if (ttsMode === "piper") {
+    const piperWarning = checkPiperInstall();
+    if (piperWarning) console.error(`\n[Natiq] ${piperWarning}\n`);
+  }
 }

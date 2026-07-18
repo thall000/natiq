@@ -8,9 +8,8 @@ If something below looks wrong, trust the code over this file and update this fi
 ## What this project is
 
 Natiq helps people (primarily in Egypt) prepare for German-language customer service job
-interviews and calls. It is a Next.js app with a local SQLite database for optional
-accounts and saved progress — there is no external database service, and every feature
-also works fully without an account.
+interviews and calls. It is a Next.js app with a Turso (libSQL) database for optional
+accounts and saved progress, and every feature also works fully without an account.
 
 **Read `AGENTS.md` before making changes.** This repo intentionally pins a Next.js version
 that is not the Next.js most training data or tooling assumes — check
@@ -38,15 +37,21 @@ work with zero extra config.
   directly by pages — there is no CMS:
   - `app/scenarios.js` — categories + interview/roleplay scenarios (~3000 lines).
   - `app/vocabulary.js` + `app/vocabulary-translations.js` — the Customer Care Bible content.
-- **Persistence**: `lib/db.js` opens a single local SQLite file (`data/natiq.db`, created
-  on first use, gitignored) via `better-sqlite3` with three tables: `users`,
-  `practice_sessions`, `conversation_results`. Plain SQL, no ORM, no migration tooling —
-  schema is created with `CREATE TABLE IF NOT EXISTS` at module load.
+- **Persistence**: `lib/db.js` opens a Turso (libSQL) database via `@libsql/client`, cached
+  on `globalThis`, with three tables: `users`, `practice_sessions`, `conversation_results`.
+  Plain SQL (async — `@libsql/client` is a network client, not a sync local driver), no
+  ORM, no migration tooling — schema is created with `CREATE TABLE IF NOT EXISTS` at module
+  load. A separate dev/prod database is selected by `NODE_ENV` (see `lib/env.js`'s
+  `getTursoCredentials()`) — this was a deliberate migration off the original local SQLite
+  file specifically because typical deployment targets (Render, Vercel) have an ephemeral
+  filesystem that can't hold a local database file.
 - **Auth**: `auth.js` (project root) configures Auth.js (`next-auth`) v5 with a Credentials
   provider, JWT session strategy, password hashing via `@node-rs/bcrypt`. No OAuth
   providers, no email verification, no password reset flow.
-- **External services**: Groq API (LLM + Whisper transcription) and a local Piper TTS
-  process. No other third-party services. No Anthropic/Claude calls currently happen at
+- **External services**: Groq API (LLM + Whisper transcription), Turso (database), and
+  text-to-speech in one of two modes depending on deployment target — a local/Render Piper
+  TTS process, or the browser's own `window.speechSynthesis` on Vercel (see "Deployment"
+  below). No other third-party services. No Anthropic/Claude calls currently happen at
   runtime despite `ANTHROPIC_API_KEY` existing as an env var slot (see "Known limitations").
 
 ## Routes
@@ -75,7 +80,7 @@ work with zero extra config.
 | `/api/feedback` (POST) | Groq `llama-3.3-70b-versatile` | Grades a single transcript against a scenario prompt. Returns `{ feedback: { assessment, grammarMistakes[], naturalPhrasing[], contentIdeas[], modelAnswer } }` (no `score` field — see naming inconsistency note below). Same `getGroqApiKey()` guard as above. |
 | `/api/conversation` (POST) | Groq `llama-3.3-70b-versatile` | Drives the AI customer's next line in a live roleplay. Returns `{ line }`. Same guard. |
 | `/api/conversation-feedback` (POST) | Groq `llama-3.3-70b-versatile` | Grades a full conversation transcript at once. Returns `{ feedback: { score, scoreJustification, assessment, grammarMistakes[], naturalPhrasing[], contentIdeas[], modelAnswer } }`, clamping `score` to an integer 1–10 or dropping it. Same guard. |
-| `/api/speak` (POST) | Local Piper process (`piperClient.js`) | Accepts `{ text }`, returns `audio/wav`. `maxDuration = 30`. |
+| `/api/speak` (POST) | Local Piper process (`piperClient.js`) | Accepts `{ text }`, returns `audio/wav`. `maxDuration = 30`. Only reachable when `getTtsMode()` resolves to `"piper"` — returns `501` otherwise (Vercel/browser mode never calls this route at all; the client speaks directly via `window.speechSynthesis`). |
 | `/api/auth/[...nextauth]` (GET/POST) | — | Re-exports `handlers` from `auth.js` — this is the whole Auth.js wiring for the route handler. |
 | `/api/register` (POST) | — | Validates email format + password length (≥8 chars), checks for an existing account, hashes the password (`@node-rs/bcrypt`), inserts the user. No CSRF token needed beyond what Auth.js itself provides for the sign-in call that follows client-side. |
 | `/api/progress/practice-session` (POST) | — | Requires a session (`auth()`); saves `{ category, questions: [{ scenarioId, title, prompt, transcript, feedback }] }` for the logged-in user. Called once by `SessionRunner` when a 10-question session completes, only if `useSession()` shows a user. |
@@ -92,25 +97,32 @@ scores, only the full assessment text; saved conversation results always show a 
 
 ## Key components
 
-- **`lib/db.js`** — Opens `better-sqlite3` against `data/natiq.db`, cached on
-  `globalThis.__natiqDb` (same Turbopack-HMR-survival pattern as `piperClient.js`).
-  Exports plain functions: `getUserByEmail`, `getUserById`, `createUser`,
+- **`lib/db.js`** — Opens a Turso `@libsql/client`, cached on `globalThis.__natiqDb` /
+  `globalThis.__natiqDbSchemaReady` (same Turbopack-HMR-survival pattern `piperClient.js`
+  uses for its child process, but genuinely serverless-safe here since a libSQL client has
+  no persistent-process requirement — it reconnects fine across cold starts). Every
+  exported function is now `async`: `getUserByEmail`, `getUserById`, `createUser`,
   `savePracticeSession`, `saveConversationResult`, `getPracticeSessionsForUser`,
-  `getConversationResultsForUser`. JSON columns (`questions_json`, `feedback_json`) are
-  stringified on write and parsed on read by these functions — callers never touch raw SQL
-  rows directly.
-- **`lib/env.js`** — `getGroqApiKey()` (throws a clear error if unset; called by every
-  Groq-backed route) and `checkRequiredEnvVars()` (used by `instrumentation.js`).
+  `getConversationResultsForUser` — every caller `await`s them. JSON columns
+  (`questions_json`, `feedback_json`) are stringified on write and parsed on read by these
+  functions — callers never touch raw SQL rows directly.
+- **`lib/env.js`** — `getGroqApiKey()` (throws if unset), `getTursoCredentials()` (picks
+  `TURSO_DEV_*`/`TURSO_PROD_*` by `NODE_ENV`, throws if either half missing),
+  `checkPiperInstall()` (returns a warning string, not a throw, if the resolved Piper
+  binary/model isn't found on disk), `getTtsMode()` (resolves `"piper"`/`"browser"` — see
+  "Deployment" below), and `checkRequiredEnvVars()` (used by `instrumentation.js`).
 - **`instrumentation.js`** (project root) — `register()` runs once at server startup (skips
-  the edge runtime) and prints a loud, explicit console warning naming any missing required
-  env var (`GROQ_API_KEY`, `AUTH_SECRET`), rather than letting the failure surface later as
-  a cryptic runtime error.
+  the edge runtime), prints a loud console warning naming any missing required env var
+  (`GROQ_API_KEY`, `AUTH_SECRET`, the active `TURSO_*` pair), logs the resolved TTS mode,
+  and — only when that mode is `"piper"` — warns if the Piper binary/model isn't found on
+  disk, rather than letting any of this surface later as a cryptic runtime error.
 - **`auth.js`** (project root) — `NextAuth({...})` config: JWT session strategy, Credentials
-  provider whose `authorize()` looks up the user by email in SQLite and verifies the
-  password with `@node-rs/bcrypt`. Exports `{ handlers, auth, signIn, signOut }`. `auth()`
-  is called directly in Server Components/Route Handlers wherever a session check is
-  needed — there is **no `proxy.js`/middleware file** and no global route protection,
-  because nothing in the app is hard-gated behind login (see Phase 1 requirements below).
+  provider whose `authorize()` looks up the user by email in Turso (`await getUserByEmail`)
+  and verifies the password with `@node-rs/bcrypt`. Exports `{ handlers, auth, signIn,
+  signOut }`. `auth()` is called directly in Server Components/Route Handlers wherever a
+  session check is needed — there is **no `proxy.js`/middleware file** and no global route
+  protection, because nothing in the app is hard-gated behind login (see Phase 1
+  requirements below).
 - **`app/components/AuthHeaderStatus.js`** (Client) — Shows "Anmelden / Registrieren" links
   when logged out, or "Mein Fortschritt" + an "Abmelden" (`signOut`) button when logged in.
   Uses `useSession()`, so it needs `SessionProviderWrapper` above it in the tree.
@@ -136,15 +148,25 @@ scores, only the full assessment text; saved conversation results always show a 
   `/api/progress/practice-session` exactly once, only if `useSession()` shows a logged-in
   user. Save failures are swallowed (best-effort — shouldn't block the "session complete"
   screen).
-- **`app/live/[category]/LiveConversation.js`** (Client) — The live roleplay state machine,
-  unchanged in structure from before Phase 3 except: takes `categoryId`/`scenarioTitle`
-  props and POSTs to `/api/progress/conversation` after receiving conversation feedback (if
-  logged in); the `[leak-check]`/`[speak-check]` console instrumentation is now routed
-  through module-level `devLog`/`devWarn` helpers that no-op when
+- **`app/live/[category]/LiveConversation.js`** (Client) — The live roleplay state machine.
+  Takes `categoryId`/`scenarioTitle`/`ttsMode` props (`ttsMode` resolved server-side by
+  `page.js` via `getTtsMode()`) and POSTs to `/api/progress/conversation` after receiving
+  conversation feedback (if logged in); the `[leak-check]`/`[speak-check]` console
+  instrumentation is routed through module-level `devLog`/`devWarn` helpers that no-op when
   `process.env.NODE_ENV === "production"` (one exception: the `[speak] Synthesis failed...`
   line is a real error, left as a plain `console.error` so it's never silenced); phase-change
-  text now has a `.fade-in` class and a `.speaking-indicator` (three bouncing dots) shows
-  next to "Der Kunde antwortet"/"Der Kunde spricht".
+  text has a `.fade-in` class and a `.speaking-indicator` (three bouncing dots) shows
+  next to "Der Kunde antwortet"/"Der Kunde spricht". The `speak()` callback branches on
+  `ttsMode`: `"piper"` keeps the original sentence-split + one-sentence-lookahead
+  fetch-ahead-of-playback pipeline against `/api/speak` (`synthesizeSentence` +
+  `new Audio(blobUrl)`); `"browser"` uses a new `speakBrowser()` helper that speaks the same
+  split sentences sequentially via `window.speechSynthesis`/`SpeechSynthesisUtterance` (no
+  fetch, no prefetch pipeline needed — synthesis is instant) with a bounded
+  (≤300ms, empirically near-instant in Chrome) wait for `getVoices()`/`voiceschanged` to
+  pick a German (`lang` starting `"de"`) voice if the list hasn't loaded yet. Both paths
+  share the same `onAudioStart`/`onDone` callback contract and the same
+  `cancelPlaybackRef`-based cancellation used by `stopSpeaking()`, so `requestNextLine()` and
+  `HandsFreeRecorder` need no knowledge of which backend is active.
 - **`app/live/[category]/HandsFreeRecorder.js`** (Client) — Voice Activity Detection (VAD),
   structurally unchanged from before Phase 3. Now also renders a live 5-bar mic-level meter
   (`.mic-bars`/`.mic-bar` in globals.css) during calibrating/listening/recording, updated by
@@ -153,9 +175,20 @@ scores, only the full assessment text; saved conversation results always show a 
   meter repaints every animation frame with zero extra re-renders. This is genuinely
   reactive to the real RMS amplitude already being computed for speech detection, not a
   decorative loop.
-- **`app/api/speak/piperClient.js`** — Unchanged from before Phase 1–3. Manages a single
-  long-lived `piper.exe` child process per Node process, cached on `globalThis` to survive
-  Turbopack HMR.
+- **`app/api/speak/piperClient.js`** — Manages a single long-lived Piper child process per
+  Node process, cached on `globalThis` to survive Turbopack HMR. Platform-detects its own
+  binary path/extension (`C:\piper\piper.exe` on Windows, `vendor/piper/piper` on Linux by
+  default, `PIPER_DIR` overridable on both) — everything else in the file (the FIFO
+  stdin/stdout queue, crash/respawn handling) is OS-agnostic and unchanged by platform.
+  `app/api/speak/route.js` only imports this module lazily, after confirming
+  `getTtsMode() === "piper"`, so it's never touched at all when running in browser-TTS mode.
+- **`scripts/setup-piper.js`** — `postinstall` hook (runs after every `npm install`,
+  including Render's default build). No-ops on Windows. On Linux, no-ops if `getTtsMode()`
+  resolves to `"browser"` (e.g. on Vercel, where the download would never be used), or if
+  Piper is already installed and looks intact (binary + model present, model ≥100MB).
+  Otherwise downloads `rhasspy/piper`'s `2023.11.14-2` Linux release tarball and the German
+  Thorsten "high" voice model from Hugging Face into `vendor/piper/` (gitignored), sets the
+  binary's executable bit, and fails the build loudly on any error.
 
 ## Content inventory
 
@@ -178,7 +211,7 @@ scores, only the full assessment text; saved conversation results always show a 
   `verben`, `adjektive`, and `phrasen` arrays; `app/vocabulary-translations.js` maps each
   word/phrase string to `{ en, ar }` translations looked up by exact string match.
 
-## Database schema (`data/natiq.db`)
+## Database schema (Turso, dev/prod databases per `NODE_ENV`)
 
 ```sql
 users (id, email UNIQUE, password_hash, created_at)
@@ -186,9 +219,38 @@ practice_sessions (id, user_id, category, questions_json, created_at)
 conversation_results (id, user_id, category, scenario_title, scenario_prompt, score, feedback_json, created_at)
 ```
 
-No migrations tooling — the schema is just `CREATE TABLE IF NOT EXISTS` run at module load
-in `lib/db.js`. Changing a column later means writing a manual `ALTER TABLE` (or wiping the
-dev DB file, which is disposable/gitignored).
+No migrations tooling — the schema is just `CREATE TABLE IF NOT EXISTS` run (as a `batch`)
+at module load in `lib/db.js`. Changing a column later means writing a manual
+`ALTER TABLE` (or wiping the dev database via the Turso dashboard/CLI — the dev database
+itself is disposable, unlike prod).
+
+## Deployment
+
+Three real targets exist today, each with a different TTS mode and (for the DB) the same
+Turso backend but a different logical database:
+
+| Target | `NODE_ENV` | `process.env.VERCEL` | TTS mode (auto) | Turso DB |
+|---|---|---|---|---|
+| Local dev (Windows) | `development` | unset | `piper` (`C:\piper`) | `TURSO_DEV_*` |
+| Render | `production` | unset | `piper` (`vendor/piper`, auto-downloaded) | `TURSO_PROD_*` |
+| Vercel | `production` | set | `browser` (`window.speechSynthesis`) | `TURSO_PROD_*` |
+
+`TTS_MODE` in `.env.local`/the platform's env settings overrides the auto-detection in
+either direction on any target. There is no `vercel.json` in this repo and none is needed —
+Next.js is zero-config on Vercel, and the only thing that would ever warrant one (a build
+command override, function memory/duration tuning) isn't needed here: `maxDuration` is
+already set per-route via Next's own route-segment config (`/api/speak`, `/api/transcribe`),
+and Vercel picks that up natively.
+
+**Why three different TTS-mode/DB combinations instead of one config**: Piper needs a
+**persistent process** kept alive across requests — true on a normal server (local dev,
+Render) but not on Vercel's serverless functions, where each request may hit a different,
+short-lived instance with no shared process state. SQLite (the original DB) had the same
+problem in reverse (needs a persistent *file*), which is why the DB moved to Turso first —
+a network database has no persistent-process/file requirement either way, so it didn't need
+a second mode; TTS did, because there's no equivalent "just make Piper a network service"
+move without hosting Piper somewhere separately (not done — browser TTS was simpler and
+free).
 
 ## Known limitations / honest state of each feature
 
@@ -204,9 +266,10 @@ before Phase 3:
 - VAD thresholds (`HandsFreeRecorder.js`) are first-pass estimates, explicitly marked as
   needing real-world tuning. The new mic-level meter makes the current sensitivity visible
   but doesn't change the underlying thresholds.
-- Piper is a single local process shared across all concurrent users of the dev/prod
-  server (no per-request or per-user isolation); the `MAX_PENDING` queue cap (10) is a
-  backstop, not real concurrency.
+- In `"piper"` mode, Piper is a single local process shared across all concurrent users of
+  the dev/prod server (no per-request or per-user isolation); the `MAX_PENDING` queue cap
+  (10) is a backstop, not real concurrency. In `"browser"` mode (Vercel) this doesn't apply
+  — synthesis happens independently in each visitor's own browser.
 - `[leak-check]`/`[speak-check]` console instrumentation is now silenced in production
   builds (Phase 4) but still fires in dev, same as before.
 
@@ -231,12 +294,11 @@ Phase 1. Specific limitations:
 - **No rate limiting on `/api/register` or the credentials sign-in flow** — nothing stops
   scripted account-creation or credential-stuffing attempts beyond what Auth.js does by
   default (which is not much for a Credentials provider).
-- **SQLite is a single local file, not a managed database.** Fine for local dev, self-host
-  on one machine, or one Vercel/Node instance with a persistent disk — it will *not* work
-  as-is on typical serverless deployments (ephemeral filesystem) or any multi-instance
-  deployment, since there's no shared storage or replication. Moving to a hosted Postgres
-  (or similar) would be a real migration, not a config change, given there's no ORM/schema
-  migration tooling in place yet.
+- **Turso has no schema migration tooling** — `CREATE TABLE IF NOT EXISTS` at module load is
+  fine for the current three-table schema, but changing a column later means a manual
+  `ALTER TABLE` by hand (or an ORM migration adopted later); there's no Prisma/Drizzle-style
+  migration story in place yet. (This used to be a local SQLite file — that's no longer
+  true; see "Deployment" above for why it moved.)
 - **No account deletion, email change, or password change UI.** Once created, a user's
   only self-service action is signing in/out.
 - **`Mein Fortschritt` has no pagination.** Every saved session/conversation for a user is
@@ -251,18 +313,22 @@ Phase 1. Specific limitations:
   temporary, cost-driven stand-in for Claude/Anthropic — see the comments in both files.
   `ANTHROPIC_API_KEY` still exists in `.env.local` as an unused placeholder for that future
   swap.
-- **Piper path is Windows-specific and machine-specific by default** (`C:\piper`,
-  overridable via `PIPER_DIR`). Unchanged from before.
-- **Env var validation exists now (Phase 4)** but only covers `GROQ_API_KEY` and
-  `AUTH_SECRET` — it does not validate `PIPER_DIR`/Piper's actual presence on disk, so a
-  missing/misconfigured Piper install still only surfaces as a runtime error the first time
-  `/api/speak` is called, not at startup.
+- **Piper path defaults are platform-specific** (`C:\piper` on Windows, `vendor/piper` on
+  Linux), overridable via `PIPER_DIR` on either — this is intentional now (see "Deployment"
+  above), not an oversight.
+- **Env var validation covers the active TTS mode's actual needs**: `checkPiperInstall()`
+  (called from `instrumentation.js`, only when `getTtsMode() === "piper"`) validates the
+  resolved Piper binary/model exist on disk, so a missing/misconfigured Piper install
+  surfaces as a startup warning, not just a runtime error the first time `/api/speak` is
+  called. There is no equivalent check for browser mode — `window.speechSynthesis` support
+  can't be checked server-side, and `speakBrowser()` already degrades gracefully (a clear
+  error message + moving the conversation on) if a visitor's browser lacks it or has zero
+  voices.
 - **`lang="de"` is now correct** on `<html>` in `app/layout.js` (was `"en"`, fixed in Phase 3).
-- **No deployment configuration.** `next.config.mjs` is still the default empty config;
-  no Vercel/Docker/CI config in the repo. Piper's local-process dependency and SQLite's
-  local-file dependency both mean a standard serverless deployment (e.g., Vercel) would
-  need real rearchitecting (hosted TTS or a persistent server for Piper; a hosted DB for
-  SQLite) before either `/live` or accounts/progress would work there as-is.
+- **Deployment configuration exists now** (see "Deployment" above) — Render (Piper, Linux
+  binary auto-downloaded at build time) and Vercel (browser TTS, zero-config Next.js
+  detection, no `vercel.json`) are both real, working targets, not aspirational. `next.config.mjs`
+  is still the default empty config — nothing in it needed to change for either target.
 
 ## For an AI reviewing this repo
 
