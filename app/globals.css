@@ -7,6 +7,7 @@
   --accent: #8a5540;
   --on-accent: #fff;
   --danger: #a34a3f;
+  --info: #5f7a94;
   --accent-grammar: #a9765f;
   --accent-phrasing: #74829c;
   --accent-content: #ad8c4c;
@@ -32,6 +33,7 @@
     --accent: #e0916a;
     --on-accent: #221d18;
     --danger: #e0776a;
+    --info: #8fa8c2;
     --accent-grammar: #cf9b7d;
     --accent-phrasing: #9fabc4;
     --accent-content: #d4b06e;
@@ -54,6 +56,7 @@
   --accent: #e0916a;
   --on-accent: #221d18;
   --danger: #e0776a;
+  --info: #8fa8c2;
   --accent-grammar: #cf9b7d;
   --accent-phrasing: #9fabc4;
   --accent-content: #d4b06e;
@@ -225,6 +228,11 @@ button {
 
 .form-error {
   color: var(--danger);
+  font-size: 0.9rem;
+}
+
+.form-info {
+  color: var(--info);
   font-size: 0.9rem;
 }
 

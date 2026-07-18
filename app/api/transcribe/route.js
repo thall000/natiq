@@ -1,4 +1,5 @@
 import { getGroqApiKey } from "../../../lib/env";
+import { parseGroqError } from "../../../lib/groq";
 
 export const maxDuration = 30;
 
@@ -33,9 +34,15 @@ export async function POST(request) {
   });
 
   if (!res.ok) {
-    const errorText = await res.text();
+    const groqError = await parseGroqError(res);
+    if (groqError.isRateLimited) {
+      return Response.json(
+        { error: "rate_limited", retryAfterSeconds: groqError.retryAfterSeconds },
+        { status: 429 }
+      );
+    }
     return Response.json(
-      { error: "Transcription failed", details: errorText },
+      { error: "Transcription failed", details: groqError.rawText },
       { status: 502 }
     );
   }

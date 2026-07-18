@@ -4,6 +4,13 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useSession } from "next-auth/react";
 import HandsFreeRecorder from "./HandsFreeRecorder";
 import FeedbackDisplay from "../../components/FeedbackDisplay";
+import { fetchWithRateLimitRetry } from "../../../lib/clientApiError";
+
+// Shown instead of a failure message when Groq's daily/rolling token limit is hit —
+// a calm, expected-to-recover state, not something broken. See lib/groq.js /
+// lib/clientApiError.js for how routes signal this distinctly from a real error.
+const RATE_LIMITED_MESSAGE =
+  "Gerade sind viele Übungen gleichzeitig aktiv — bitte versuchen Sie es in ein paar Minuten erneut.";
 
 const PHASE = {
   INTRO: "intro",
@@ -120,6 +127,7 @@ export default function LiveConversation({ scenarioPrompt, categoryId, scenarioT
   const [messages, setMessages] = useState([]);
   const [feedback, setFeedback] = useState(null);
   const [errorMessage, setErrorMessage] = useState("");
+  const [errorIsInfo, setErrorIsInfo] = useState(false);
   const [audioStarted, setAudioStarted] = useState(false);
   const endedRef = useRef(false);
   const audioRef = useRef(null);
@@ -332,16 +340,32 @@ export default function LiveConversation({ scenarioPrompt, categoryId, scenarioT
     async (history) => {
       setPhase(PHASE.AI_LOADING);
       setErrorMessage("");
+      setErrorIsInfo(false);
       try {
-        const res = await fetch("/api/conversation", {
+        // fetchWithRateLimitRetry silently retries once, after Groq's own suggested
+        // wait, when that wait is short — the "Der Kunde antwortet …" spinner just
+        // stays up a little longer rather than surfacing an error for a transient,
+        // fast-recovering limit.
+        const result = await fetchWithRateLimitRetry("/api/conversation", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ scenarioPrompt, messages: history }),
         });
-        if (!res.ok) throw new Error("Conversation request failed");
-        const data = await res.json();
         if (endedRef.current) return;
 
+        if (!result.ok) {
+          if (result.rateLimited) {
+            setErrorMessage(RATE_LIMITED_MESSAGE);
+            setErrorIsInfo(true);
+          } else {
+            setErrorMessage("Der Kunde konnte nicht antworten. Bitte versuchen Sie es erneut.");
+            setErrorIsInfo(false);
+          }
+          setPhase(PHASE.USER_TURN);
+          return;
+        }
+
+        const data = result.data;
         const nextMessages = [...history, { role: "assistant", content: data.line }];
         setMessages(nextMessages);
         setPhase(PHASE.AI_SPEAKING);
@@ -356,6 +380,7 @@ export default function LiveConversation({ scenarioPrompt, categoryId, scenarioT
       } catch (err) {
         if (endedRef.current) return;
         setErrorMessage("Der Kunde konnte nicht antworten. Bitte versuchen Sie es erneut.");
+        setErrorIsInfo(false);
         setPhase(PHASE.USER_TURN);
       }
     },
@@ -364,6 +389,7 @@ export default function LiveConversation({ scenarioPrompt, categoryId, scenarioT
 
   const handleStart = async () => {
     setErrorMessage("");
+    setErrorIsInfo(false);
     try {
       await ensureMicReady();
     } catch (err) {
@@ -388,14 +414,27 @@ export default function LiveConversation({ scenarioPrompt, categoryId, scenarioT
     releaseMic();
     setPhase(PHASE.ENDING);
     setErrorMessage("");
+    setErrorIsInfo(false);
     try {
-      const res = await fetch("/api/conversation-feedback", {
+      const result = await fetchWithRateLimitRetry("/api/conversation-feedback", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ scenarioPrompt, messages }),
       });
-      if (!res.ok) throw new Error("Conversation feedback failed");
-      const data = await res.json();
+
+      if (!result.ok) {
+        if (result.rateLimited) {
+          setErrorMessage(RATE_LIMITED_MESSAGE);
+          setErrorIsInfo(true);
+        } else {
+          setErrorMessage("Feedback konnte nicht geladen werden. Bitte versuchen Sie es erneut.");
+          setErrorIsInfo(false);
+        }
+        setPhase(PHASE.ENDED);
+        return;
+      }
+
+      const data = result.data;
       setFeedback(data.feedback);
       setPhase(PHASE.ENDED);
 
@@ -416,6 +455,7 @@ export default function LiveConversation({ scenarioPrompt, categoryId, scenarioT
       }
     } catch (err) {
       setErrorMessage("Feedback konnte nicht geladen werden. Bitte versuchen Sie es erneut.");
+      setErrorIsInfo(false);
       setPhase(PHASE.ENDED);
     }
   }, [scenarioPrompt, messages, stopSpeaking, releaseMic, authSession, categoryId, scenarioTitle]);
@@ -498,7 +538,9 @@ export default function LiveConversation({ scenarioPrompt, categoryId, scenarioT
         />
       )}
 
-      {errorMessage && <p className="fade-in form-error">{errorMessage}</p>}
+      {errorMessage && (
+        <p className={`fade-in ${errorIsInfo ? "form-info" : "form-error"}`}>{errorMessage}</p>
+      )}
 
       {phase !== PHASE.INTRO && phase !== PHASE.ENDING && phase !== PHASE.ENDED && (
         <button

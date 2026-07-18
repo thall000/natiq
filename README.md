@@ -107,6 +107,12 @@ TURSO_PROD_AUTH_TOKEN=your_turso_prod_auth_token_here
 
 # Optional — which Edge TTS voice to use in "edge" mode (default de-DE-FlorianMultilingualNeural).
 # EDGE_TTS_VOICE=de-DE-SeraphinaMultilingualNeural
+
+# Optional — Groq model per route (both default to llama-3.3-70b-versatile). Groq rate
+# limits are per model, so pointing feedback at a different model than conversation
+# means the two features draw from separate quota buckets instead of one shared one.
+# GROQ_CONVERSATION_MODEL=llama-3.3-70b-versatile
+# GROQ_FEEDBACK_MODEL=llama-3.1-8b-instant
 ```
 
 Generate `AUTH_SECRET` with, e.g., `openssl rand -base64 32` (or any random 32+ character

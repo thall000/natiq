@@ -4,7 +4,13 @@
 // just this fetch call (same pattern as the transcription provider in
 // app/api/transcribe/route.js).
 
-import { getGroqApiKey } from "../../../lib/env";
+import { getGroqApiKey, getGroqFeedbackModel } from "../../../lib/env";
+import { parseGroqError } from "../../../lib/groq";
+
+// The JSON schema below (assessment + up to a handful of grammar/phrasing items +
+// contentIdeas + modelAnswer) realistically runs a few hundred tokens; this leaves
+// comfortable headroom without leaving the door open to a runaway response.
+const MAX_FEEDBACK_TOKENS = 900;
 
 const SYSTEM_PROMPT =
   "Du bist ein einfühlsamer Sprechtrainer für Bewerber, die sich auf deutschsprachige Kundenservice-Interviews (BPO) vorbereiten. " +
@@ -32,9 +38,7 @@ const SYSTEM_PROMPT =
   "3. naturalPhrasing: Stellen, die grammatisch KORREKT sind, aber steif, zu wörtlich übersetzt oder nicht muttersprachlich klingen. " +
   "Für jede Stelle: \"original\" (was gesagt wurde), \"suggestion\" (wie ein Muttersprachler es eher sagen würde), " +
   "und \"reason\" — ein kurzer, konkreter Grund (z. B. \"gebräuchlichere Wortstellung\", \"idiomatischer Ausdruck im Kundenservice-Kontext\"). " +
-  "Es gelten dieselben Regeln wie bei grammarMistakes: nur Deutsch, keine Transkriptionsfehler wörtlich übernehmen, " +
-  "keine feste Obergrenze, aber lieber weniger und sichere Vorschläge als erzwungene. Leeres Array ist in Ordnung. " +
-  "Freundlicher Coaching-Ton, keine Kritik.\n" +
+  "Es gelten dieselben Regeln wie bei grammarMistakes (nur Deutsch, keine Transkriptionsfehler übernehmen). Freundlicher Coaching-Ton, keine Kritik.\n" +
   "4. contentIdeas: 1-2 Vorschläge für etwas Relevantes, das die Person ergänzen könnte, um die Antwort inhaltlich zu stärken " +
   "(z. B. ein Beispiel, eine konkrete Fähigkeit, eine Zahl/ein Detail).\n" +
   "5. modelAnswer: Eine kurze, überzeugende Beispielantwort auf dieselbe Szenario-Frage — klar als Beispiel gedacht, " +
@@ -62,8 +66,8 @@ export async function POST(request) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "llama-3.3-70b-versatile",
-      max_tokens: 1500,
+      model: getGroqFeedbackModel(),
+      max_tokens: MAX_FEEDBACK_TOKENS,
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
@@ -79,9 +83,15 @@ export async function POST(request) {
   });
 
   if (!res.ok) {
-    const errorText = await res.text();
+    const groqError = await parseGroqError(res);
+    if (groqError.isRateLimited) {
+      return Response.json(
+        { error: "rate_limited", retryAfterSeconds: groqError.retryAfterSeconds },
+        { status: 429 }
+      );
+    }
     return Response.json(
-      { error: "Feedback generation failed", details: errorText },
+      { error: "Feedback generation failed", details: groqError.rawText },
       { status: 502 }
     );
   }

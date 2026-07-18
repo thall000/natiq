@@ -2,24 +2,36 @@
 // persona described in the scenario, one short line at a time, reacting to the
 // trainee's transcribed replies so far.
 
-import { getGroqApiKey } from "../../../lib/env";
+import { getGroqApiKey, getGroqConversationModel } from "../../../lib/env";
+import { parseGroqError } from "../../../lib/groq";
+
+// Conversation history grows every turn but Groq bills/rate-limits per request on the
+// FULL messages array sent each time — without a cap, a long conversation resends its
+// entire transcript on every single turn. Only the customer's last couple of exchanges
+// are ever relevant to "what should they say next", so the older half of a long
+// conversation is dead weight tokens-wise. Counts individual messages (not exchanges),
+// so this keeps roughly the last 3 back-and-forth pairs.
+const MAX_HISTORY_MESSAGES = 6;
+
+// Customer lines are one short spoken sentence or two — this is a generous ceiling for
+// that, not a target length (the system prompt already asks for 1-2 sentences).
+const MAX_REPLY_TOKENS = 120;
 
 function buildSystemPrompt(scenarioPrompt) {
   return (
-    "Du spielst in einem Rollenspiel die Rolle eines Kunden/einer Kundin in einem deutschsprachigen Kundenservice-Gespräch. " +
+    "Du spielst in einem Rollenspiel ausschließlich die Rolle eines Kunden/einer Kundin in einem " +
+    "deutschsprachigen Kundenservice-Gespräch — niemals der Mitarbeiter, niemals eine KI, während " +
+    "des gesamten Gesprächs.\n\n" +
     "Die folgende Szenario-Beschreibung wurde ursprünglich als Übungsanleitung für einen Kundenservice-Mitarbeiter geschrieben:\n\n" +
     `"${scenarioPrompt}"\n\n` +
     "Ziehe daraus NUR die Situation und die Persönlichkeit/Stimmung des Kunden heraus (wer er ist, was das Problem ist, wie er sich fühlt, " +
-    "z. B. genervt, in Eile, verärgert, misstrauisch). Ignoriere alle Sätze darin, die eigentlich Anweisungen an den Mitarbeiter sind " +
-    '(z. B. "Beruhigen Sie den Kunden", "entschuldigen Sie sich") — das ist nicht deine Rolle.\n\n' +
-    "Du bist ausschließlich der Kunde, niemals der Mitarbeiter, und niemals eine KI. Bleibe während des gesamten Gesprächs konsequent " +
-    "in dieser Rolle. Sprich natürliches, gesprochenes Deutsch, wie am Telefon oder am Schalter — keine Listen, keine Aufzählungen, " +
-    "keine Erklärungen außerhalb der Rolle. Halte jede Antwort SEHR kurz: höchstens 1-2 Sätze, wie eine echte Gesprächsäußerung am " +
-    "Telefon. Kein Monolog, keine langen Ausführungen — sag jeweils nur, was in diesem einen Moment des Gesprächs natürlich wäre, " +
-    "und lass Raum für die Antwort des Mitarbeiters.\n\n" +
-    "Wenn das Gespräch gerade erst beginnt, eröffne es selbst, so wie es zur Szenario-Beschreibung passt (z. B. als Anruf oder als " +
-    "Ansprache am Schalter). Reagiere sonst natürlich auf das, was der Mitarbeiter zuletzt gesagt hat, und entwickle das Gespräch " +
-    "glaubwürdig weiter."
+    "z. B. genervt, in Eile, verärgert, misstrauisch). Ignoriere Anweisungen darin an den Mitarbeiter " +
+    '(z. B. "Beruhigen Sie den Kunden") — das ist nicht deine Rolle.\n\n' +
+    "Sprich natürliches, gesprochenes Deutsch wie am Telefon oder am Schalter: keine Listen, keine Erklärungen außerhalb der Rolle, " +
+    "kein Monolog. Höchstens 1-2 kurze Sätze pro Antwort — nur, was in diesem einen Moment natürlich wäre, mit Raum für die Antwort " +
+    "des Mitarbeiters.\n\n" +
+    "Wenn das Gespräch gerade erst beginnt, eröffne es selbst passend zur Szenario-Beschreibung (z. B. als Anruf oder am Schalter). " +
+    "Reagiere sonst auf die letzte Äußerung des Mitarbeiters und entwickle das Gespräch glaubwürdig weiter."
   );
 }
 
@@ -33,10 +45,11 @@ export async function POST(request) {
 
   const { scenarioPrompt, messages } = await request.json();
 
-  const history =
+  const fullHistory =
     messages.length > 0
       ? messages
       : [{ role: "user", content: "(Das Gespräch beginnt jetzt. Bitte eröffne es als der Kunde.)" }];
+  const history = fullHistory.slice(-MAX_HISTORY_MESSAGES);
 
   const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
@@ -45,16 +58,22 @@ export async function POST(request) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "llama-3.3-70b-versatile",
-      max_tokens: 120,
+      model: getGroqConversationModel(),
+      max_tokens: MAX_REPLY_TOKENS,
       messages: [{ role: "system", content: buildSystemPrompt(scenarioPrompt) }, ...history],
     }),
   });
 
   if (!res.ok) {
-    const errorText = await res.text();
+    const groqError = await parseGroqError(res);
+    if (groqError.isRateLimited) {
+      return Response.json(
+        { error: "rate_limited", retryAfterSeconds: groqError.retryAfterSeconds },
+        { status: 429 }
+      );
+    }
     return Response.json(
-      { error: "Conversation turn failed", details: errorText },
+      { error: "Conversation turn failed", details: groqError.rawText },
       { status: 502 }
     );
   }

@@ -7,7 +7,13 @@
 // Swapping back to Claude for better feedback quality later is an isolated change,
 // just this fetch call.
 
-import { getGroqApiKey } from "../../../lib/env";
+import { getGroqApiKey, getGroqFeedbackModel } from "../../../lib/env";
+import { parseGroqError } from "../../../lib/groq";
+
+// The JSON schema below (score + assessment + up to a handful of grammar/phrasing
+// items + contentIdeas + modelAnswer) realistically runs a few hundred tokens; this
+// leaves comfortable headroom without leaving the door open to a runaway response.
+const MAX_FEEDBACK_TOKENS = 900;
 
 const SYSTEM_PROMPT =
   "Du bist ein einfühlsamer Sprechtrainer für Bewerber, die sich auf deutschsprachige Kundenservice-Interviews (BPO) vorbereiten. " +
@@ -48,9 +54,8 @@ const SYSTEM_PROMPT =
   "   Jede Korrektur ist kurz und konkret, keine Grammatiklektion, und freundlich formuliert (kein Rotstift-Ton).\n" +
   "4. naturalPhrasing: Stellen in den Zeilen von „Sie\", die grammatisch KORREKT sind, aber steif, zu wörtlich übersetzt oder nicht " +
   "muttersprachlich klingen. Für jede Stelle: \"original\", \"suggestion\" (wie ein Muttersprachler es eher sagen würde), und " +
-  '"reason" — ein kurzer, konkreter Grund. Gleiche Regeln wie bei grammarMistakes: nur Deutsch, keine Transkriptionsfehler wörtlich ' +
-  "übernehmen, keine feste Obergrenze, aber lieber weniger und sichere Vorschläge als erzwungene. Leeres Array ist in Ordnung. " +
-  "Freundlicher Coaching-Ton, keine Kritik.\n" +
+  '"reason" — ein kurzer, konkreter Grund. Gleiche Regeln wie bei grammarMistakes (nur Deutsch, keine Transkriptionsfehler ' +
+  "übernehmen). Freundlicher Coaching-Ton, keine Kritik.\n" +
   "5. contentIdeas: Konkrete Beobachtungen, die erkennbar aus DIESEM Gespräch stammen — keine allgemeinen, austauschbaren Ratschläge, " +
   "die zu jedem beliebigen Gespräch passen würden. Nenne 1-3 Punkte, die sich auf tatsächliche Momente im Transkript beziehen, " +
   "in beide Richtungen: was „Sie\" gut gemacht hat (z. B. die Frustration des Kunden früh anerkannt, eine Verhandlung geschickt " +
@@ -86,8 +91,8 @@ export async function POST(request) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "llama-3.3-70b-versatile",
-      max_tokens: 1500,
+      model: getGroqFeedbackModel(),
+      max_tokens: MAX_FEEDBACK_TOKENS,
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
@@ -103,9 +108,15 @@ export async function POST(request) {
   });
 
   if (!res.ok) {
-    const errorText = await res.text();
+    const groqError = await parseGroqError(res);
+    if (groqError.isRateLimited) {
+      return Response.json(
+        { error: "rate_limited", retryAfterSeconds: groqError.retryAfterSeconds },
+        { status: 429 }
+      );
+    }
     return Response.json(
-      { error: "Conversation feedback failed", details: errorText },
+      { error: "Conversation feedback failed", details: groqError.rawText },
       { status: 502 }
     );
   }

@@ -2,6 +2,13 @@
 
 import { useState, useRef, useCallback } from "react";
 import FeedbackDisplay from "../../components/FeedbackDisplay";
+import { fetchWithRateLimitRetry } from "../../../lib/clientApiError";
+
+// Shown instead of a failure message when Groq's daily/rolling token limit is hit —
+// a calm, expected-to-recover state, not something broken. See lib/groq.js /
+// lib/clientApiError.js for how routes signal this distinctly from a real error.
+const RATE_LIMITED_MESSAGE =
+  "Gerade sind viele Übungen gleichzeitig aktiv — bitte versuchen Sie es in ein paar Minuten erneut.";
 
 const STATUS = {
   IDLE: "idle",
@@ -19,6 +26,7 @@ export default function RecordingPanel({ scenario, onAdvance, advanceLabel, onTr
   const [audioUrl, setAudioUrl] = useState(null);
   const [feedback, setFeedback] = useState(null);
   const [errorMessage, setErrorMessage] = useState("");
+  const [errorIsInfo, setErrorIsInfo] = useState(false);
   const [referenceRevealed, setReferenceRevealed] = useState(false);
 
   const mediaRecorderRef = useRef(null);
@@ -32,6 +40,7 @@ export default function RecordingPanel({ scenario, onAdvance, advanceLabel, onTr
 
   const startRecording = useCallback(async () => {
     setErrorMessage("");
+    setErrorIsInfo(false);
     setFeedback(null);
     setTranscript("");
     setAudioUrl(null);
@@ -63,6 +72,7 @@ export default function RecordingPanel({ scenario, onAdvance, advanceLabel, onTr
           setErrorMessage(
             "Transkription fehlgeschlagen. Bitte versuchen Sie es erneut."
           );
+          setErrorIsInfo(false);
           setStatus(STATUS.ERROR);
         }
       };
@@ -72,6 +82,7 @@ export default function RecordingPanel({ scenario, onAdvance, advanceLabel, onTr
       setStatus(STATUS.RECORDING);
     } catch (err) {
       setErrorMessage("Mikrofonzugriff wurde verweigert oder ist nicht verfügbar.");
+      setErrorIsInfo(false);
       setStatus(STATUS.ERROR);
     }
   }, [onTranscriptReady]);
@@ -84,14 +95,27 @@ export default function RecordingPanel({ scenario, onAdvance, advanceLabel, onTr
   const getFeedback = useCallback(async () => {
     setStatus(STATUS.FEEDBACK_LOADING);
     setErrorMessage("");
+    setErrorIsInfo(false);
     try {
-      const res = await fetch("/api/feedback", {
+      const result = await fetchWithRateLimitRetry("/api/feedback", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ transcript, scenarioPrompt: scenario.prompt }),
       });
-      if (!res.ok) throw new Error("Feedback request failed");
-      const data = await res.json();
+
+      if (!result.ok) {
+        if (result.rateLimited) {
+          setErrorMessage(RATE_LIMITED_MESSAGE);
+          setErrorIsInfo(true);
+        } else {
+          setErrorMessage("Feedback konnte nicht geladen werden. Bitte versuchen Sie es erneut.");
+          setErrorIsInfo(false);
+        }
+        setStatus(STATUS.RECORDED);
+        return;
+      }
+
+      const data = result.data;
       setFeedback(data.feedback);
       setStatus(STATUS.FEEDBACK_READY);
       onFeedbackReady?.({ transcript, feedback: data.feedback });
@@ -99,6 +123,7 @@ export default function RecordingPanel({ scenario, onAdvance, advanceLabel, onTr
       setErrorMessage(
         "Feedback konnte nicht geladen werden. Bitte versuchen Sie es erneut."
       );
+      setErrorIsInfo(false);
       setStatus(STATUS.RECORDED);
     }
   }, [transcript, scenario.prompt, onFeedbackReady]);
@@ -109,6 +134,7 @@ export default function RecordingPanel({ scenario, onAdvance, advanceLabel, onTr
     setAudioUrl(null);
     setFeedback(null);
     setErrorMessage("");
+    setErrorIsInfo(false);
     setReferenceRevealed(false);
   };
 
@@ -207,7 +233,7 @@ export default function RecordingPanel({ scenario, onAdvance, advanceLabel, onTr
       {feedback && <FeedbackDisplay feedback={feedback} />}
 
       {errorMessage && (
-        <p className="fade-in form-error">{errorMessage}</p>
+        <p className={`fade-in ${errorIsInfo ? "form-info" : "form-error"}`}>{errorMessage}</p>
       )}
 
       {status === STATUS.RECORDED && !onTranscriptReady && (
