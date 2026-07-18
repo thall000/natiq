@@ -6,12 +6,12 @@ import { useEffect, useRef, useState } from "react";
 const CALIBRATION_MS = 500; // how long to sample ambient noise before arming speech detection
 const BASELINE_NOISE_MULTIPLIER = 3; // effective speech threshold = measured baseline * this
 const MIN_SPEECH_THRESHOLD = 0.015; // floor under the adaptive threshold, for near-silent rooms
-const NOISE_FLOOR_TIME_CONSTANT_MS = 8000; // how fast the rolling noise floor follows non-speech RMS: ~8s, slow enough that a mid-sentence pause or the 1200ms turn-silence window can't drag it up mid-word, fast enough to track real ambient drift (AC kicking in, etc.) over the course of a turn
+const NOISE_FLOOR_TIME_CONSTANT_MS = 8000; // how fast the rolling noise floor follows non-speech RMS: ~8s, slow enough that a mid-sentence thinking pause (up to the 2500ms turn-silence window) can only nudge it a modest fraction of the way, fast enough to track real ambient drift (AC kicking in, etc.) over the course of a turn
 const MIN_SPEECH_MS = 250; // must stay above threshold this long to count as real speech start (debounces clicks/coughs)
 const MIN_TOTAL_SPEECH_MS = 400; // cumulative time above threshold required to treat a segment as real speech, not noise
 const SEGMENT_SILENCE_MS = 600; // pause long enough to close the current segment, but not end the turn (e.g. between sentences)
-const TURN_SILENCE_MS = 1200; // sustained silence, tracked at the turn level, that ends the whole turn
-const TURN_SAFETY_TIMEOUT_MS = 5000; // absolute fallback: force-end the turn after this much silence, independent of TURN_SILENCE_MS
+const TURN_SILENCE_MS = 2500; // sustained silence, tracked at the turn level, that ends the whole turn — tune this one constant as real-tester data comes in; 1200ms cut off German learners' natural 1.5-2.5s mid-sentence word-searching pauses
+const TURN_SAFETY_TIMEOUT_MS = 8000; // absolute fallback: force-end the turn after this much silence, independent of TURN_SILENCE_MS — raised proportionally with TURN_SILENCE_MS so it can't fire during a normal long thinking pause
 const MAX_RECORDING_MS = 60000; // failsafe cap on a single turn's length, measured from detected speech start
 const RETRY_DELAY_MS = 1500; // delay before automatically re-listening after a failed transcription
 
