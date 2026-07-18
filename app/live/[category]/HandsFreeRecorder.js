@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 // --- Tunable VAD constants (adjust after real-world testing) ---
 const CALIBRATION_MS = 500; // how long to sample ambient noise before arming speech detection
@@ -23,6 +23,23 @@ const STATUS = {
   MIC_ERROR: "mic_error",
   TRANSCRIBE_ERROR: "transcribe_error",
 };
+
+// useSyncExternalStore (rather than a manual mounted-flag + effect) is the React-
+// sanctioned way to read a value that can differ between the server render and the
+// client: it returns the server snapshot (false — the server has no URL to read)
+// for the first client render too, then syncs to the real client value right after,
+// without React ever seeing a mismatched render. No subscription is needed since
+// this app never changes ?vaddebug= via client-side URL updates after load.
+const noopSubscribe = () => () => {};
+function getVadDebugClientSnapshot() {
+  return (
+    process.env.NODE_ENV !== "production" &&
+    new URLSearchParams(window.location.search).get("vaddebug") === "1"
+  );
+}
+function getVadDebugServerSnapshot() {
+  return false;
+}
 
 function readRms(analyser, dataArray) {
   analyser.getByteTimeDomainData(dataArray);
@@ -84,18 +101,33 @@ export default function HandsFreeRecorder({ stream, audioContext, onTranscriptRe
   // already computed below (rms, threshold, current state) — it never feeds back
   // into VAD behavior. DOM refs updated directly per frame, same reasoning as
   // barRefs/updateBars, so it can repaint every animation frame without a re-render.
-  const [vadDebugEnabled] = useState(
-    () =>
-      process.env.NODE_ENV !== "production" &&
-      typeof window !== "undefined" &&
-      new URLSearchParams(window.location.search).get("vaddebug") === "1"
+  // vadDebugEnabled comes from useSyncExternalStore (see getVadDebug*Snapshot above)
+  // so the first client render matches the server (both false) and only flips to the
+  // real value right after — no hydration mismatch.
+  //
+  // vadDebugEnabledRef mirrors that same boolean into a ref for updateDebugOverlay(),
+  // which is invoked from calibrate()/monitor() — a self-perpetuating
+  // requestAnimationFrame chain kicked off once from a mount-only effect, whose
+  // closures are frozen at that first render and never recreated from later
+  // re-renders. Reading the state value directly from inside that frozen chain would
+  // forever see whatever it was on the render that kicked the chain off; a ref's
+  // `.current` is always read fresh regardless of which render's closure is
+  // executing it.
+  const vadDebugEnabled = useSyncExternalStore(
+    noopSubscribe,
+    getVadDebugClientSnapshot,
+    getVadDebugServerSnapshot
   );
+  const vadDebugEnabledRef = useRef(false);
+  useEffect(() => {
+    vadDebugEnabledRef.current = vadDebugEnabled;
+  }, [vadDebugEnabled]);
   const debugRmsRef = useRef(null);
   const debugThresholdRef = useRef(null);
   const debugBarRef = useRef(null);
 
   function updateDebugOverlay(rms, threshold) {
-    if (!vadDebugEnabled) return;
+    if (!vadDebugEnabledRef.current) return;
     if (debugRmsRef.current) debugRmsRef.current.textContent = rms.toFixed(4);
     if (debugThresholdRef.current) debugThresholdRef.current.textContent = threshold.toFixed(4);
     if (debugBarRef.current) {
